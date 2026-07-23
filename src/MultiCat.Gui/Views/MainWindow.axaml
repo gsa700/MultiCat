@@ -1,0 +1,133 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MultiCat.Gui.ViewModels"
+        xmlns:controls="using:MultiCat.Gui.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="680"
+        x:Class="MultiCat.Gui.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Width="960" Height="700" MinWidth="820" MinHeight="560"
+        Title="MultiCAT">
+
+  <Design.DataContext>
+    <vm:MainViewModel />
+  </Design.DataContext>
+
+  <Grid ColumnDefinitions="196,*">
+
+    <Border Grid.Column="0" BorderBrush="#40808080" BorderThickness="0,0,1,0">
+      <DockPanel Margin="8">
+        <Button DockPanel.Dock="Bottom" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center" Margin="0,8,0,0">+ Add radio</Button>
+        <StackPanel DockPanel.Dock="Top" Spacing="4">
+          <TextBlock Text="Radios" FontSize="11" Foreground="#8E8E8E" Margin="8,4,0,2" />
+          <ListBox ItemsSource="{Binding Radios}" SelectedItem="{Binding SelectedRadio}"
+                   Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:RadioItemViewModel">
+                <StackPanel Margin="2,4">
+                  <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium" />
+                  <TextBlock Text="{Binding ConnectionSummary}" FontSize="11" Foreground="#8E8E8E" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Margin="16,12,16,16" Spacing="14"
+                  DataContext="{Binding SelectedRadio}"
+                  x:DataType="vm:RadioItemViewModel">
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="Radio connection" FontSize="13" FontWeight="Medium" VerticalAlignment="Bottom" />
+          <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#3B9E5F" VerticalAlignment="Bottom" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,8,*,8,*,8,*">
+          <StackPanel Grid.Column="0" Spacing="3">
+            <TextBlock Text="Rig model (hamlib)" FontSize="11" Foreground="#8E8E8E" />
+            <ComboBox ItemsSource="{Binding RigModels}" SelectedIndex="{Binding SelectedRigModel}"
+                      HorizontalAlignment="Stretch" FontSize="13" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="3">
+            <TextBlock Text="Connection" FontSize="11" Foreground="#8E8E8E" />
+            <ComboBox ItemsSource="{Binding ConnectionKinds}" SelectedIndex="{Binding SelectedConnectionKind}"
+                      HorizontalAlignment="Stretch" FontSize="13" />
+          </StackPanel>
+          <StackPanel Grid.Column="4" Spacing="3">
+            <TextBlock Text="Port" FontSize="11" Foreground="#8E8E8E" />
+            <ComboBox ItemsSource="{Binding PortChoices}" SelectedIndex="{Binding SelectedPortChoice}"
+                      HorizontalAlignment="Stretch" FontSize="13" />
+          </StackPanel>
+          <StackPanel Grid.Column="6" Spacing="3">
+            <TextBlock Text="Baud" FontSize="11" Foreground="#8E8E8E" />
+            <ComboBox ItemsSource="{Binding BaudRates}" SelectedIndex="{Binding SelectedBaudRate}"
+                      HorizontalAlignment="Stretch" FontSize="13" />
+          </StackPanel>
+        </Grid>
+
+        <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="4">
+          <controls:SignalFlowControl Height="170"
+                                      RadioName="{Binding Name}"
+                                      Ports="{Binding FlowPortLabels}" />
+        </Border>
+
+        <DockPanel>
+          <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5">+ Add port</Button>
+          <TextBlock Text="Client ports" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8">
+          <StackPanel>
+            <Grid ColumnDefinitions="100,*,110,90" Margin="12,6">
+              <TextBlock Grid.Column="0" Text="Port" FontSize="11" Foreground="#8E8E8E" />
+              <TextBlock Grid.Column="1" Text="Label" FontSize="11" Foreground="#8E8E8E" />
+              <TextBlock Grid.Column="2" Text="PTT" FontSize="11" Foreground="#8E8E8E" />
+              <TextBlock Grid.Column="3" Text="Status" FontSize="11" Foreground="#8E8E8E" />
+            </Grid>
+            <Separator Background="#40808080" Height="1" Margin="0" />
+            <ItemsControl ItemsSource="{Binding Ports}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ClientPortViewModel">
+                  <Grid ColumnDefinitions="100,*,110,90" Margin="12,7">
+                    <TextBlock Grid.Column="0" Text="{Binding PortDisplay}" FontSize="13"
+                               FontFamily="Cascadia Mono,Consolas" />
+                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="13" />
+                    <TextBlock Grid.Column="2" Text="{Binding Ptt}" FontSize="12" Foreground="#8E8E8E" />
+                    <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="12"
+                               Foreground="{Binding IsActive, Converter={x:Static vm:Converters.ActiveBrush}}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="Traffic monitor" FontSize="13" FontWeight="Medium" />
+
+        <Border Background="#15808080" CornerRadius="8" Padding="12,8" MinHeight="120">
+          <ItemsControl ItemsSource="{Binding Traffic}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TrafficEntry">
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,1">
+                  <TextBlock Text="{Binding Time}" FontSize="12" Foreground="#8E8E8E"
+                             FontFamily="Cascadia Mono,Consolas" />
+                  <TextBlock Text="{Binding Body}" FontSize="12"
+                             FontFamily="Cascadia Mono,Consolas" />
+                  <TextBlock Text="{Binding Note}" FontSize="12" Foreground="#8E8E8E"
+                             FontFamily="Cascadia Mono,Consolas" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>
