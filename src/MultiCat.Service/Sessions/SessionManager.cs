@@ -80,6 +80,77 @@ public sealed class SessionManager(ILogger<SessionManager> logger, IConfiguratio
         _ => string.Empty,
     };
 
+    public RadioSession? FindSession(string radioName) =>
+        _sessions.FirstOrDefault(s => s.Options.Name == radioName);
+
+    /// <summary>Every COM name the mux already knows about: real system ports plus
+    /// both sides of every configured client port.</summary>
+    public IEnumerable<string> KnownPortNames()
+    {
+        foreach (var name in System.IO.Ports.SerialPort.GetPortNames())
+        {
+            yield return name;
+        }
+
+        foreach (var session in _sessions)
+        {
+            if (session.Options.ComPort is { } radioPort)
+            {
+                yield return radioPort;
+            }
+
+            foreach (var port in session.Options.ClientPorts)
+            {
+                yield return port.PortDisplay;
+                if (port.MuxPort is { } mux)
+                {
+                    yield return mux;
+                }
+            }
+        }
+    }
+
+    /// <summary>Persists a newly added client port into appsettings.json so it
+    /// survives restarts. The file is the single source of radio configuration.</summary>
+    public void PersistClientPort(string radioName, ClientPortOptions port, string contentRootPath)
+    {
+        var path = Path.Combine(contentRootPath, "appsettings.json");
+        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        var radios = root["Radios"]?.AsArray();
+        var radio = radios?.FirstOrDefault(r => r?["Name"]?.GetValue<string>() == radioName)?.AsObject();
+        if (radio is null)
+        {
+            logger.LogWarning("Could not persist port {Port}: radio {Radio} not found in {Path}", port.PortDisplay, radioName, path);
+            return;
+        }
+
+        if (radio["ClientPorts"] is not System.Text.Json.Nodes.JsonArray ports)
+        {
+            ports = [];
+            radio["ClientPorts"] = ports;
+        }
+
+        var entry = new System.Text.Json.Nodes.JsonObject
+        {
+            ["PortDisplay"] = port.PortDisplay,
+            ["Label"] = port.Label,
+            ["Ptt"] = port.Ptt,
+        };
+        if (port.MuxPort is { } mux)
+        {
+            entry["MuxPort"] = mux;
+        }
+
+        if (port.TcpPort is { } tcp)
+        {
+            entry["TcpPort"] = tcp;
+        }
+
+        ports.Add(entry);
+        File.WriteAllText(path, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        logger.LogInformation("Persisted client port {Port} for {Radio}", port.PortDisplay, radioName);
+    }
+
     public (Guid Id, ChannelReader<ActivityEvent> Reader) Subscribe()
     {
         var id = Guid.NewGuid();

@@ -183,6 +183,13 @@ public sealed class RadioSession : IAsyncDisposable
         }
     }
 
+    /// <summary>Adds and starts a client port at runtime (Add port button).</summary>
+    public void AddClientPort(ClientPortOptions port)
+    {
+        Options.ClientPorts.Add(port);
+        StartClientPort(port);
+    }
+
     public void RegisterEndpoint(ClientPortEndpoint endpoint) => _endpoints[endpoint] = 0;
 
     public void UnregisterEndpoint(ClientPortEndpoint endpoint) => _endpoints.TryRemove(endpoint, out _);

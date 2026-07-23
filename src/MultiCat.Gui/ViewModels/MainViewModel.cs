@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Grpc.Core;
 using MultiCat.Contracts;
 using MultiCat.Gui.Services;
@@ -34,7 +35,46 @@ public partial class MainViewModel : ViewModelBase
     public partial string ServiceStatus { get; set; } = "connecting to service…";
 
     [ObservableProperty]
+    public partial string DriverStatus { get; set; } = string.Empty;
+
+    [ObservableProperty]
     public partial bool IsLive { get; set; }
+
+    [RelayCommand]
+    private async Task AddPortAsync()
+    {
+        if (_connection is null || SelectedRadio is null)
+        {
+            ServiceStatus = "service offline — cannot add ports";
+            return;
+        }
+
+        try
+        {
+            ServiceStatus = "creating virtual port…";
+            var reply = await _connection.Client.AddClientPortAsync(
+                new AddClientPortRequest { Radio = SelectedRadio.Name },
+                deadline: DateTime.UtcNow.AddSeconds(60));
+
+            ServiceStatus = reply.Message;
+            if (reply.Ok)
+            {
+                SelectedRadio.Ports.Add(new ClientPortViewModel
+                {
+                    PortDisplay = reply.PortDisplay,
+                    Label = reply.PortDisplay,
+                    Ptt = "CAT only",
+                    Status = "active",
+                    IsActive = true,
+                });
+                SelectedRadio.OnPortsChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ServiceStatus = $"add port failed: {ex.Message}";
+        }
+    }
 
     private async Task ConnectAsync()
     {
@@ -52,6 +92,10 @@ public partial class MainViewModel : ViewModelBase
             SelectedRadio = Radios.FirstOrDefault();
             IsLive = true;
             ServiceStatus = "service connected";
+
+            var driver = await _connection.Client.GetDriverStateAsync(
+                new GetDriverStateRequest(), deadline: DateTime.UtcNow.AddSeconds(3));
+            DriverStatus = driver.Installed ? "virtual COM driver ready" : "virtual COM driver not installed";
 
             _streamCts = new CancellationTokenSource();
             _ = PumpActivityAsync(_streamCts.Token);

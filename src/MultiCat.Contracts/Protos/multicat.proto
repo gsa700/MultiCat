@@ -9,11 +9,33 @@ package multicat;
 service MultiCatControl {
   rpc GetRadios (GetRadiosRequest) returns (RadioList);
   rpc StreamActivity (StreamActivityRequest) returns (stream ActivityEvent);
+  rpc GetDriverState (GetDriverStateRequest) returns (DriverState);
+  rpc AddClientPort (AddClientPortRequest) returns (AddClientPortReply);
 }
 
 message GetRadiosRequest {}
 
 message StreamActivityRequest {}
+
+message GetDriverStateRequest {}
+
+// State of the virtual COM port driver (com0com today, MultiCAT's own later).
+message DriverState {
+  bool installed = 1;
+  string detail = 2;
+}
+
+message AddClientPortRequest {
+  string radio = 1;
+  string label = 2;
+  string ptt = 3;
+}
+
+message AddClientPortReply {
+  bool ok = 1;
+  string message = 2;
+  string port_display = 3;
+}
 
 message RadioList {
   repeated RadioInfo radios = 1;

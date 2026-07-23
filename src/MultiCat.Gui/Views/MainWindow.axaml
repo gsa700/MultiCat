@@ -19,8 +19,10 @@
 
     <Border Grid.Column="0" BorderBrush="#40808080" BorderThickness="0,0,1,0">
       <DockPanel Margin="8">
-        <TextBlock DockPanel.Dock="Bottom" Text="{Binding ServiceStatus}" FontSize="11"
-                   Foreground="#8E8E8E" Margin="8,6,0,2" TextWrapping="Wrap" />
+        <StackPanel DockPanel.Dock="Bottom" Margin="8,6,0,2" Spacing="2">
+          <TextBlock Text="{Binding ServiceStatus}" FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding DriverStatus}" FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap" />
+        </StackPanel>
         <Button DockPanel.Dock="Bottom" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center" Margin="0,8,0,0">+ Add radio</Button>
         <StackPanel DockPanel.Dock="Top" Spacing="4">
@@ -80,7 +82,8 @@
         </Border>
 
         <DockPanel>
-          <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5">+ Add port</Button>
+          <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5"
+                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).AddPortCommand}">+ Add port</Button>
           <TextBlock Text="Client ports" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
         </DockPanel>
 

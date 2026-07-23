@@ -47,13 +47,15 @@ arbitration, com0com pair management from the GUI.
 
 ### Virtual COM ports
 
-MultiCAT opens one end of a [com0com](https://sourceforge.net/projects/com0com/)
-pair and your application opens the other. Install com0com, create a pair (for
-example `COM11` ↔ `COM21`), then in `appsettings.json` give the client port
-`"PortDisplay": "COM11", "MuxPort": "COM21"`. On startup the port shows
-"active via COM21" — point the app at COM11 and its CAT traffic is arbitrated
-like any other client. Without com0com the port simply reports unavailable;
-everything else keeps working.
+MultiCAT manages the virtual port driver for you — you never touch `setupc.exe`
+or see a CNCA0/CNCB0 name. Install the signed
+[com0com](https://sourceforge.net/projects/com0com/) driver once (a future
+MultiCAT release will ship its own driver in this slot), then click **Add port**
+in the GUI: MultiCAT picks a free COM name, creates the pair silently (one UAC
+prompt), starts arbitrating it, and persists it to configuration. Point your
+application at the new COM port and its CAT traffic is multiplexed like any
+other client. Without the driver installed, Add port explains what's missing
+and every other endpoint keeps working.
 
 ## Building
 
