@@ -83,11 +83,17 @@ public sealed class SessionManager(ILogger<SessionManager> logger, IConfiguratio
     public RadioSession? FindSession(string radioName) =>
         _sessions.FirstOrDefault(s => s.Options.Name == radioName);
 
-    /// <summary>Every COM name the mux already knows about: real system ports plus
-    /// both sides of every configured client port.</summary>
+    /// <summary>Every COM name the mux must avoid: real system ports, names reserved
+    /// in the COM Name Arbiter database (com0com refuses those), and both sides of
+    /// every configured client port.</summary>
     public IEnumerable<string> KnownPortNames()
     {
         foreach (var name in System.IO.Ports.SerialPort.GetPortNames())
+        {
+            yield return name;
+        }
+
+        foreach (var name in VirtualPorts.ComNameArbiter.ReadReservedNames())
         {
             yield return name;
         }

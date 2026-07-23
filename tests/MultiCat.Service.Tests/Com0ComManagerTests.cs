@@ -54,3 +54,21 @@ public class Com0ComManagerTests
         Assert.Equal("COM21", mux);
     }
 }
+
+public class ComNameArbiterTests
+{
+    [Fact]
+    public void ParseComDb_ReadsBitsLsbFirst()
+    {
+        // 0b0000_0101 = COM1 and COM3; second byte 0b0000_0100 = COM11.
+        var names = ComNameArbiter.ParseComDb([0b0000_0101, 0b0000_0100]);
+        Assert.Equal(["COM1", "COM3", "COM11"], names);
+    }
+
+    [Fact]
+    public void ParseComDb_EmptyBitmap_YieldsNothing()
+    {
+        Assert.Empty(ComNameArbiter.ParseComDb([]));
+        Assert.Empty(ComNameArbiter.ParseComDb([0, 0, 0, 0]));
+    }
+}

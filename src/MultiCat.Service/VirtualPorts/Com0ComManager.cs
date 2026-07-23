@@ -70,7 +70,9 @@ public sealed partial class Com0ComManager(IConfiguration configuration, ILogger
         return output is null ? [] : ParseList(output);
     }
 
-    /// <summary>Creates a com0com pair. Requires elevation; in dev this pops one UAC prompt.</summary>
+    /// <summary>Creates a com0com pair. Requires elevation; in dev this pops one UAC prompt.
+    /// Success is verified by the port names appearing in the system port list —
+    /// setupc's own list command demands elevation, so it can't be used for checks.</summary>
     public async Task<bool> CreatePairAsync(string appPort, string muxPort, CancellationToken cancellationToken = default)
     {
         var output = await RunSetupcAsync(
@@ -80,12 +82,21 @@ public sealed partial class Com0ComManager(IConfiguration configuration, ILogger
             return false;
         }
 
-        var pairs = await ListPairsAsync(cancellationToken);
-        var created = pairs.Any(p =>
-            string.Equals(p.PortA, appPort, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(p.PortB, muxPort, StringComparison.OrdinalIgnoreCase));
-        logger.LogInformation("com0com pair {App} <-> {Mux}: {Result}", appPort, muxPort, created ? "created" : "not visible after install");
-        return created;
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var names = System.IO.Ports.SerialPort.GetPortNames();
+            if (names.Contains(appPort, StringComparer.OrdinalIgnoreCase) &&
+                names.Contains(muxPort, StringComparer.OrdinalIgnoreCase))
+            {
+                logger.LogInformation("com0com pair {App} <-> {Mux} created", appPort, muxPort);
+                return true;
+            }
+
+            await Task.Delay(300, cancellationToken);
+        }
+
+        logger.LogWarning("com0com pair {App} <-> {Mux} not visible after install", appPort, muxPort);
+        return false;
     }
 
     private async Task<string?> RunSetupcAsync(string arguments, bool elevated, CancellationToken cancellationToken)
