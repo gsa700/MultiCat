@@ -34,28 +34,36 @@ Early development — pre-alpha. Working today:
   short-TTL poll cache, client port endpoints, radio state tracker with
   frequency/mode events (unit tested)
 - Serial transport for real radios (opens only the configured port, never probes)
-- Client endpoints: raw CAT over TCP (localhost) works out of the box; virtual COM
-  ports activate automatically when the configured com0com pair exists
+- Client endpoints, all driverless: a hamlib **rigctld-protocol listener** (WSJT-X,
+  fldigi, JTDX, GridTracker, and anything hamlib-aware connects natively) and raw
+  CAT over TCP, both on localhost
+- Virtual COM port management for com0com, where its driver still loads (see below)
 - Service host: radio sessions from `appsettings.json`, gRPC control API over a
   named pipe, built-in simulated K3 for driverless development
-- Avalonia GUI connected live to the service: radio status, per-port state, and a
-  streaming traffic monitor (falls back to demo data when the service is offline)
+- Avalonia GUI connected live to the service: radio status, per-port state, one-click
+  Add port, and a streaming traffic monitor (falls back to demo data when the
+  service is offline)
 
-Not yet built: rigctld-protocol listener, hamlib rig database enumeration, CI-V
-session wiring (the framer exists; sessions are Kenwood-family for now), PTT
-arbitration, com0com pair management from the GUI.
+Not yet built: OmniRig-compatible COM server (driverless coverage for N1MM+ and
+friends), hamlib rig database enumeration, CI-V session wiring (the framer exists;
+sessions are Kenwood-family for now), PTT arbitration, first-party virtual COM
+driver.
 
-### Virtual COM ports
+### Virtual COM ports and the driver reality
 
 MultiCAT manages the virtual port driver for you — you never touch `setupc.exe`
-or see a CNCA0/CNCB0 name. Install the signed
-[com0com](https://sourceforge.net/projects/com0com/) driver once (a future
-MultiCAT release will ship its own driver in this slot), then click **Add port**
-in the GUI: MultiCAT picks a free COM name, creates the pair silently (one UAC
-prompt), starts arbitrating it, and persists it to configuration. Point your
-application at the new COM port and its CAT traffic is multiplexed like any
-other client. Without the driver installed, Add port explains what's missing
-and every other endpoint keeps working.
+or see a CNCA0/CNCB0 name. With the signed
+[com0com](https://sourceforge.net/projects/com0com/) driver installed, **Add
+port** picks a free COM name (avoiding names burned in the Windows COM Name
+Arbiter database), creates the pair silently (one UAC prompt), starts
+arbitrating it, and persists it to configuration.
+
+**However:** current Windows 11 builds enforce driver-signing policy that
+rejects com0com's 2012-era signature outright (device problem code 52),
+regardless of Memory Integrity settings. On such systems MultiCAT runs fully
+driverless via the rigctld and TCP endpoints; a first-party attestation-signed
+driver is the planned long-term fix for real COM ports there. On Windows 10 and
+older Windows 11 builds, the com0com path works as designed.
 
 ## Building
 

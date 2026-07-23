@@ -36,6 +36,9 @@ public sealed record ClientPortOptions
 
     /// <summary>Raw-CAT TCP listener port on localhost.</summary>
     public int? TcpPort { get; init; }
+
+    /// <summary>hamlib rigctld-protocol listener port on localhost (WSJT-X, fldigi, …).</summary>
+    public int? RigctldPort { get; init; }
 }
 
 /// <summary>One radio: transport + arbiter + state tracker + client endpoints, plus an
@@ -48,6 +51,7 @@ public sealed class RadioSession : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<ClientPortEndpoint, byte> _endpoints = new();
     private readonly List<TcpRawListener> _listeners = [];
+    private readonly Dictionary<string, RigctldListener> _rigctldListeners = [];
     private readonly List<ClientPortEndpoint> _ownedEndpoints = [];
     private readonly Dictionary<string, string> _portStatus = [];
 
@@ -177,6 +181,18 @@ public sealed class RadioSession : IAsyncDisposable
                 _portStatus[port.PortDisplay] = $"failed: {ex.Message}";
             }
         }
+        else if (port.RigctldPort is { } rigctldPort)
+        {
+            try
+            {
+                _rigctldListeners[port.PortDisplay] = new RigctldListener(port.Label, rigctldPort, this);
+                _portStatus[port.PortDisplay] = $"rigctld on localhost:{rigctldPort}";
+            }
+            catch (Exception ex)
+            {
+                _portStatus[port.PortDisplay] = $"failed: {ex.Message}";
+            }
+        }
         else
         {
             _portStatus[port.PortDisplay] = "not configured";
@@ -201,7 +217,7 @@ public sealed class RadioSession : IAsyncDisposable
             return ("unknown", false);
         }
 
-        var active = status.StartsWith("active") || status.StartsWith("listening");
+        var active = status.StartsWith("active") || status.StartsWith("listening") || status.StartsWith("rigctld");
         if (port.TcpPort is not null && active)
         {
             var count = _listeners.Sum(l => l.ConnectionCount);
@@ -209,6 +225,11 @@ public sealed class RadioSession : IAsyncDisposable
             {
                 status = $"{count} client(s) connected";
             }
+        }
+        else if (port.RigctldPort is { } rigctldPort && active &&
+                 _rigctldListeners.TryGetValue(port.PortDisplay, out var listener) && listener.ConnectionCount > 0)
+        {
+            status = $"{listener.ConnectionCount} client(s) on localhost:{rigctldPort}";
         }
 
         return (status, active);
@@ -234,6 +255,11 @@ public sealed class RadioSession : IAsyncDisposable
     {
         _cts.Cancel();
         foreach (var listener in _listeners)
+        {
+            await listener.DisposeAsync();
+        }
+
+        foreach (var listener in _rigctldListeners.Values)
         {
             await listener.DisposeAsync();
         }
