@@ -19,6 +19,8 @@
 
     <Border Grid.Column="0" BorderBrush="#40808080" BorderThickness="0,0,1,0">
       <DockPanel Margin="8">
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding ServiceStatus}" FontSize="11"
+                   Foreground="#8E8E8E" Margin="8,6,0,2" TextWrapping="Wrap" />
         <Button DockPanel.Dock="Bottom" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center" Margin="0,8,0,0">+ Add radio</Button>
         <StackPanel DockPanel.Dock="Top" Spacing="4">

@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+option csharp_namespace = "MultiCat.Contracts";
+
+package multicat;
+
+// Control-plane API between the MultiCAT service and the GUI,
+// served over a named pipe (Kestrel ListenNamedPipe).
+service MultiCatControl {
+  rpc GetRadios (GetRadiosRequest) returns (RadioList);
+  rpc StreamActivity (StreamActivityRequest) returns (stream ActivityEvent);
+}
+
+message GetRadiosRequest {}
+
+message StreamActivityRequest {}
+
+message RadioList {
+  repeated RadioInfo radios = 1;
+}
+
+message RadioInfo {
+  string name = 1;
+  string connection_summary = 2;
+  bool connected = 3;
+  string status_text = 4;
+  repeated ClientPortInfo ports = 5;
+}
+
+message ClientPortInfo {
+  string port_display = 1;
+  string label = 2;
+  string ptt = 3;
+  string status = 4;
+  bool active = 5;
+}
+
+// One traffic-monitor line, plus optional radio-state change riding along.
+message ActivityEvent {
+  string radio = 1;
+  string time = 2;
+  string kind = 3;
+  string client_id = 4;
+  string frame = 5;
+  string note = 6;
+  int64 frequency_hz = 7;   // 0 when unchanged
+  string mode = 8;          // empty when unchanged
+}

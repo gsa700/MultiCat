@@ -14,6 +14,10 @@ public partial class RadioItemViewModel : ViewModelBase
     [ObservableProperty]
     public partial string StatusText { get; set; } = "idle";
 
+    public long? LastFrequencyHz { get; set; }
+
+    public string? LastMode { get; set; }
+
     public ObservableCollection<ClientPortViewModel> Ports { get; init; } = [];
 
     public ObservableCollection<TrafficEntry> Traffic { get; init; } = [];
