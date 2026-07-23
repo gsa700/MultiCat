@@ -31,14 +31,29 @@ suites are single-brand and closed source. MultiCAT aims at the missing combinat
 Early development — pre-alpha. Working today:
 
 - Core engine: Kenwood/Elecraft and Icom CI-V framers, transaction arbiter,
-  short-TTL poll cache, radio state tracker with frequency/mode events (unit tested)
-- Service host running the engine against a simulated K3 with concurrent demo clients
-- Avalonia GUI shell: radio list, connection settings, client-port table with per-port
-  PTT policy, animated signal-flow view, traffic monitor (mock data, not yet wired to
-  the service)
+  short-TTL poll cache, client port endpoints, radio state tracker with
+  frequency/mode events (unit tested)
+- Serial transport for real radios (opens only the configured port, never probes)
+- Client endpoints: raw CAT over TCP (localhost) works out of the box; virtual COM
+  ports activate automatically when the configured com0com pair exists
+- Service host: radio sessions from `appsettings.json`, gRPC control API over a
+  named pipe, built-in simulated K3 for driverless development
+- Avalonia GUI connected live to the service: radio status, per-port state, and a
+  streaming traffic monitor (falls back to demo data when the service is offline)
 
-Not yet built: real serial transport, GUI↔service connection, virtual COM port
-provider (com0com), hamlib rig database enumeration, rigctld TCP listener.
+Not yet built: rigctld-protocol listener, hamlib rig database enumeration, CI-V
+session wiring (the framer exists; sessions are Kenwood-family for now), PTT
+arbitration, com0com pair management from the GUI.
+
+### Virtual COM ports
+
+MultiCAT opens one end of a [com0com](https://sourceforge.net/projects/com0com/)
+pair and your application opens the other. Install com0com, create a pair (for
+example `COM11` ↔ `COM21`), then in `appsettings.json` give the client port
+`"PortDisplay": "COM11", "MuxPort": "COM21"`. On startup the port shows
+"active via COM21" — point the app at COM11 and its CAT traffic is arbitrated
+like any other client. Without com0com the port simply reports unavailable;
+everything else keeps working.
 
 ## Building
 

@@ -22,13 +22,14 @@ public sealed class ControlService(SessionManager sessions) : MultiCatControl.Mu
 
             foreach (var port in session.Options.ClientPorts)
             {
+                var (status, active) = session.PortStatus(port);
                 info.Ports.Add(new ClientPortInfo
                 {
                     PortDisplay = port.PortDisplay,
                     Label = port.Label,
                     Ptt = port.Ptt,
-                    Status = "driver pending",
-                    Active = false,
+                    Status = status,
+                    Active = active,
                 });
             }
 
