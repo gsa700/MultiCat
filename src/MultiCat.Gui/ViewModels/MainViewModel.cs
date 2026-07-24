@@ -13,6 +13,8 @@ public partial class MainViewModel : ViewModelBase
 {
     private ServiceConnection? _connection;
     private CancellationTokenSource? _streamCts;
+    private readonly Lock _captureLock = new();
+    private StreamWriter? _captureWriter;
 
     public MainViewModel()
     {
@@ -39,6 +41,83 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial bool IsLive { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCapturing { get; set; }
+
+    [ObservableProperty]
+    public partial string CaptureLabel { get; set; } = "Start capture";
+
+    [ObservableProperty]
+    public partial string CaptureStatus { get; set; } = string.Empty;
+
+    [RelayCommand]
+    private void ToggleCapture()
+    {
+        if (IsCapturing)
+        {
+            StopCapture("capture saved");
+            return;
+        }
+
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MultiCAT-logs");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"traffic-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            var writer = new StreamWriter(path, append: false) { AutoFlush = true };
+            writer.WriteLine($"# MultiCAT traffic capture started {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            writer.WriteLine("# time  radio  kind  client  frame  note");
+            lock (_captureLock)
+            {
+                _captureWriter = writer;
+            }
+
+            IsCapturing = true;
+            CaptureLabel = "Stop capture";
+            CaptureStatus = $"capturing → {path}";
+        }
+        catch (Exception ex)
+        {
+            CaptureStatus = $"capture failed: {ex.Message}";
+        }
+    }
+
+    private void StopCapture(string message)
+    {
+        lock (_captureLock)
+        {
+            _captureWriter?.WriteLine($"# stopped {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            _captureWriter?.Dispose();
+            _captureWriter = null;
+        }
+
+        IsCapturing = false;
+        CaptureLabel = "Start capture";
+        if (message.Length > 0)
+        {
+            CaptureStatus = message;
+        }
+    }
+
+    private void CaptureEvent(ActivityEvent evt)
+    {
+        lock (_captureLock)
+        {
+            if (_captureWriter is null)
+            {
+                return;
+            }
+
+            var extra = string.Empty;
+            if (evt.FrequencyHz > 0) extra += $"  freq={evt.FrequencyHz}";
+            if (evt.Mode.Length > 0) extra += $"  mode={evt.Mode}";
+            if (evt.Ptt.Length > 0) extra += $"  ptt={evt.Ptt}";
+            _captureWriter.WriteLine(
+                $"{evt.Time}  {evt.Radio}  {evt.Kind}  {(evt.ClientId.Length > 0 ? evt.ClientId : "-")}  {evt.Frame}  {evt.Note}{extra}");
+        }
+    }
 
     [RelayCommand]
     private async Task AddPortAsync()
@@ -208,6 +287,7 @@ public partial class MainViewModel : ViewModelBase
             using var call = _connection!.Client.StreamActivity(new StreamActivityRequest(), cancellationToken: ct);
             await foreach (var evt in call.ResponseStream.ReadAllAsync(ct))
             {
+                CaptureEvent(evt);
                 await Dispatcher.UIThread.InvokeAsync(() => ApplyActivity(evt));
             }
         }
@@ -229,7 +309,9 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var direction = evt.Kind is "ResponseReceived" or "Unsolicited" ? "radio →" : $"{evt.ClientId} →";
+        var fromRadio = evt.Kind is "ResponseReceived" or "Unsolicited";
+        radio.RegisterActivity(towardRadio: !fromRadio);
+        var direction = fromRadio ? "radio →" : $"{evt.ClientId} →";
         radio.Traffic.Add(new TrafficEntry(evt.Time, $"{direction} {evt.Frame}", evt.Note));
         while (radio.Traffic.Count > 9)
         {
@@ -251,12 +333,11 @@ public partial class MainViewModel : ViewModelBase
             radio.IsTransmitting = evt.Ptt == "tx";
         }
 
-        if (evt.FrequencyHz > 0 || evt.Mode.Length > 0 || evt.Ptt.Length > 0)
+        if (evt.FrequencyHz > 0 || evt.Mode.Length > 0)
         {
             var freq = radio.LastFrequencyHz is { } hz ? $" · {hz / 1000.0:N2} kHz" : string.Empty;
             var mode = radio.LastMode is { } m ? $" · {m}" : string.Empty;
-            var tx = radio.IsTransmitting ? " · ON AIR" : string.Empty;
-            radio.StatusText = $"connected{freq}{mode}{tx}";
+            radio.StatusText = $"connected{freq}{mode}";
         }
     }
 
@@ -269,8 +350,12 @@ public partial class MainViewModel : ViewModelBase
             IsConnected = radio.Connected,
             StatusText = radio.StatusText,
             IsTransmitting = radio.Transmitting,
-            SelectedRigModel = RigList.IndexOf(radio.Name),
-            PortChoices = [radio.ConnectionSummary.Split(" · ")[0]],
+            Protocol = radio.Protocol,
+            Connection = radio.Connection,
+            ComPort = radio.ComPort,
+            BaudRate = radio.BaudRate,
+            Host = radio.Host,
+            TcpPort = radio.TcpPort,
         };
 
         foreach (var port in radio.Ports)
@@ -296,8 +381,9 @@ public partial class MainViewModel : ViewModelBase
             ConnectionSummary = "COM7 · demo",
             IsConnected = true,
             StatusText = "demo · 14,074.00 kHz · USB",
-            SelectedRigModel = RigList.IndexOf("Elecraft K3"),
-            PortChoices = ["COM7 — FTDI"],
+            Connection = "Serial",
+            ComPort = "COM7",
+            BaudRate = 38400,
             Ports =
             [
                 new() { PortDisplay = "COM11", Label = "N1MM Logger", Ptt = "CAT + RTS", Status = "active", IsActive = true },
@@ -314,6 +400,7 @@ public partial class MainViewModel : ViewModelBase
 
     public void Shutdown()
     {
+        StopCapture(string.Empty);
         _streamCts?.Cancel();
         _connection?.Dispose();
     }

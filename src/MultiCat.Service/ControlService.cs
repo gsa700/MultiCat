@@ -66,13 +66,20 @@ public sealed class ControlService(
         var list = new RadioList();
         foreach (var session in sessions.Sessions)
         {
+            var options = session.Options;
             var info = new RadioInfo
             {
-                Name = session.Options.Name,
+                Name = options.Name,
                 ConnectionSummary = session.ConnectionSummary,
                 Connected = session.IsConnected,
                 StatusText = session.StatusText,
                 Transmitting = session.IsTransmitting,
+                Connection = options.Simulator ? "Simulator" : options.Connection,
+                Protocol = options.Protocol,
+                ComPort = options.ComPort ?? string.Empty,
+                BaudRate = options.BaudRate,
+                Host = options.Host ?? string.Empty,
+                TcpPort = options.TcpPort ?? 0,
             };
 
             foreach (var port in session.Options.ClientPorts)

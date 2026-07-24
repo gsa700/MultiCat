@@ -17,6 +17,19 @@ public partial class RadioItemViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsTransmitting { get; set; }
 
+    // Increments on every real activity event so the signal-flow diagram can pulse
+    // in step with actual traffic (not a decorative timer).
+    [ObservableProperty]
+    public partial long ActivityTick { get; set; }
+
+    public bool LastActivityTowardRadio { get; private set; }
+
+    public void RegisterActivity(bool towardRadio)
+    {
+        LastActivityTowardRadio = towardRadio;
+        ActivityTick++;
+    }
+
     public long? LastFrequencyHz { get; set; }
 
     public string? LastMode { get; set; }
@@ -30,19 +43,37 @@ public partial class RadioItemViewModel : ViewModelBase
     /// <summary>Call after mutating Ports so the signal-flow diagram re-reads its labels.</summary>
     public void OnPortsChanged() => OnPropertyChanged(nameof(FlowPortLabels));
 
-    public string[] RigModels { get; init; } = Services.RigList.DisplayNames;
+    // Read-only display of the radio's actual configuration (set in ToViewModel).
+    public string Protocol { get; init; } = "Kenwood";
 
-    public string[] ConnectionKinds { get; } = ["Serial (COM)", "Network (TCP)"];
+    public string Connection { get; init; } = "Serial";
 
-    public string[] PortChoices { get; init; } = ["COM7"];
+    public string ComPort { get; init; } = string.Empty;
 
-    public string[] BaudRates { get; } = ["4800", "9600", "19200", "38400", "115200"];
+    public int BaudRate { get; init; } = 38400;
 
-    public int SelectedRigModel { get; set; }
+    public string Host { get; init; } = string.Empty;
 
-    public int SelectedConnectionKind { get; set; }
+    public int TcpPort { get; init; }
 
-    public int SelectedPortChoice { get; set; }
+    public bool IsSimulator => Connection == "Simulator";
 
-    public int SelectedBaudRate { get; set; } = 3;
+    public bool IsNetwork => Connection.Equals("Tcp", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsSerial => !IsSimulator && !IsNetwork;
+
+    public string ProtocolText => Protocol.Equals("IcomCiv", StringComparison.OrdinalIgnoreCase)
+        ? "Icom CI-V"
+        : "Kenwood / Elecraft";
+
+    public string ConnectionText => Connection switch
+    {
+        "Simulator" => "Simulator (no hardware)",
+        "Tcp" => "Network (TCP/IP)",
+        _ => "Serial (COM port)",
+    };
+
+    public string AddressText => $"{Host}:{TcpPort}";
+
+    public string BaudText => BaudRate.ToString();
 }

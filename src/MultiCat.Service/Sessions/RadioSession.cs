@@ -166,8 +166,7 @@ public sealed class RadioSession : IAsyncDisposable
 
             var freq = _tracker.FrequencyHz is { } hz ? $" · {hz / 1000.0:N2} kHz" : string.Empty;
             var mode = _tracker.Mode is { } m ? $" · {m}" : string.Empty;
-            var tx = _tracker.Transmitting == true ? " · ON AIR" : string.Empty;
-            return $"connected{freq}{mode}{tx}";
+            return $"connected{freq}{mode}";
         }
     }
 

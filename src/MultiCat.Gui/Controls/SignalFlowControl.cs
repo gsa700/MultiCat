@@ -20,6 +20,14 @@ public class SignalFlowControl : Control
     public static readonly StyledProperty<IEnumerable<string>?> PortsProperty =
         AvaloniaProperty.Register<SignalFlowControl, IEnumerable<string>?>(nameof(Ports));
 
+    /// <summary>Bumped by the view model on each real activity event; a rising value
+    /// spawns one pulse, so the animation tracks actual traffic rather than a timer.</summary>
+    public static readonly StyledProperty<long> ActivityTickProperty =
+        AvaloniaProperty.Register<SignalFlowControl, long>(nameof(ActivityTick));
+
+    public static readonly StyledProperty<bool> LastTowardRadioProperty =
+        AvaloniaProperty.Register<SignalFlowControl, bool>(nameof(LastTowardRadio));
+
     private static readonly IBrush CommandBrush = new SolidColorBrush(Color.Parse("#EF9F27"));
     private static readonly IBrush ResponseBrush = new SolidColorBrush(Color.Parse("#1D9E75"));
     private static readonly IPen LinkPen = new Pen(new SolidColorBrush(Color.Parse("#808080"), 0.35), 1.5);
@@ -45,6 +53,41 @@ public class SignalFlowControl : Control
         set => SetValue(PortsProperty, value);
     }
 
+    public long ActivityTick
+    {
+        get => GetValue(ActivityTickProperty);
+        set => SetValue(ActivityTickProperty, value);
+    }
+
+    public bool LastTowardRadio
+    {
+        get => GetValue(LastTowardRadioProperty);
+        set => SetValue(LastTowardRadioProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ActivityTickProperty)
+        {
+            SpawnPulse(LastTowardRadio);
+        }
+    }
+
+    private void SpawnPulse(bool towardRadio)
+    {
+        if (_pulses.Count >= 12)
+        {
+            return;
+        }
+
+        // Radio-bound traffic pulses the radio↔hub link; client-bound traffic
+        // pulses one of the client links so both halves of the mux show life.
+        var portCount = Ports?.Count() ?? 0;
+        var link = towardRadio || portCount == 0 ? 0 : 1 + _random.Next(portCount);
+        _pulses.Add(new Pulse { Link = link, TowardRadio = towardRadio });
+    }
+
     private sealed class Pulse
     {
         public int Link;
@@ -68,7 +111,11 @@ public class SignalFlowControl : Control
 
     private void OnTick(object? sender, EventArgs e)
     {
-        var linkCount = 1 + (Ports?.Count() ?? 0);
+        if (_pulses.Count == 0)
+        {
+            return; // nothing moving; idle when there's no traffic
+        }
+
         for (var i = _pulses.Count - 1; i >= 0; i--)
         {
             _pulses[i].T += 0.022;
@@ -76,15 +123,6 @@ public class SignalFlowControl : Control
             {
                 _pulses.RemoveAt(i);
             }
-        }
-
-        if (_pulses.Count < 6 && _random.NextDouble() < 0.10)
-        {
-            _pulses.Add(new Pulse
-            {
-                Link = _random.Next(linkCount),
-                TowardRadio = _random.NextDouble() < 0.5,
-            });
         }
 
         InvalidateVisual();

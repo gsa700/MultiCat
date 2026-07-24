@@ -52,6 +52,13 @@ message RadioInfo {
   string status_text = 4;
   repeated ClientPortInfo ports = 5;
   bool transmitting = 6;
+  // Echo of the radio's actual configuration, for read-only display in the panel.
+  string connection = 7;        // "Serial", "Tcp", or "Simulator"
+  string protocol = 8;
+  string com_port = 9;
+  int32 baud_rate = 10;
+  string host = 11;
+  int32 tcp_port = 12;
 }
 
 message ClientPortInfo {

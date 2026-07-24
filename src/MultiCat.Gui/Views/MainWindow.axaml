@@ -63,33 +63,39 @@
           </StackPanel>
         </DockPanel>
 
-        <Grid ColumnDefinitions="*,8,*,8,*,8,*">
-          <StackPanel Grid.Column="0" Spacing="3">
-            <TextBlock Text="Rig model (hamlib)" FontSize="11" Foreground="#8E8E8E" />
-            <ComboBox ItemsSource="{Binding RigModels}" SelectedIndex="{Binding SelectedRigModel}"
-                      HorizontalAlignment="Stretch" FontSize="13" />
+        <WrapPanel Orientation="Horizontal">
+          <StackPanel Margin="0,0,32,0" Spacing="2">
+            <TextBlock Text="Rig" FontSize="11" Foreground="#8E8E8E" />
+            <TextBlock Text="{Binding Name}" FontSize="13" />
           </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="3">
+          <StackPanel Margin="0,0,32,0" Spacing="2">
+            <TextBlock Text="Protocol" FontSize="11" Foreground="#8E8E8E" />
+            <TextBlock Text="{Binding ProtocolText}" FontSize="13" />
+          </StackPanel>
+          <StackPanel Margin="0,0,32,0" Spacing="2">
             <TextBlock Text="Connection" FontSize="11" Foreground="#8E8E8E" />
-            <ComboBox ItemsSource="{Binding ConnectionKinds}" SelectedIndex="{Binding SelectedConnectionKind}"
-                      HorizontalAlignment="Stretch" FontSize="13" />
+            <TextBlock Text="{Binding ConnectionText}" FontSize="13" />
           </StackPanel>
-          <StackPanel Grid.Column="4" Spacing="3">
+          <StackPanel Margin="0,0,32,0" Spacing="2" IsVisible="{Binding IsSerial}">
             <TextBlock Text="Port" FontSize="11" Foreground="#8E8E8E" />
-            <ComboBox ItemsSource="{Binding PortChoices}" SelectedIndex="{Binding SelectedPortChoice}"
-                      HorizontalAlignment="Stretch" FontSize="13" />
+            <TextBlock Text="{Binding ComPort}" FontSize="13" FontFamily="Cascadia Mono,Consolas" />
           </StackPanel>
-          <StackPanel Grid.Column="6" Spacing="3">
+          <StackPanel Margin="0,0,32,0" Spacing="2" IsVisible="{Binding IsSerial}">
             <TextBlock Text="Baud" FontSize="11" Foreground="#8E8E8E" />
-            <ComboBox ItemsSource="{Binding BaudRates}" SelectedIndex="{Binding SelectedBaudRate}"
-                      HorizontalAlignment="Stretch" FontSize="13" />
+            <TextBlock Text="{Binding BaudText}" FontSize="13" FontFamily="Cascadia Mono,Consolas" />
           </StackPanel>
-        </Grid>
+          <StackPanel Margin="0,0,32,0" Spacing="2" IsVisible="{Binding IsNetwork}">
+            <TextBlock Text="Address" FontSize="11" Foreground="#8E8E8E" />
+            <TextBlock Text="{Binding AddressText}" FontSize="13" FontFamily="Cascadia Mono,Consolas" />
+          </StackPanel>
+        </WrapPanel>
 
         <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="4">
           <controls:SignalFlowControl Height="170"
                                       RadioName="{Binding Name}"
-                                      Ports="{Binding FlowPortLabels}" />
+                                      Ports="{Binding FlowPortLabels}"
+                                      ActivityTick="{Binding ActivityTick}"
+                                      LastTowardRadio="{Binding LastActivityTowardRadio}" />
         </Border>
 
         <DockPanel>
@@ -124,7 +130,15 @@
           </StackPanel>
         </Border>
 
-        <TextBlock Text="Traffic monitor" FontSize="13" FontWeight="Medium" />
+        <DockPanel>
+          <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5"
+                  Content="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureLabel}"
+                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleCaptureCommand}" />
+          <TextBlock Text="Traffic monitor" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock Text="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureStatus}"
+                   FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap"
+                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <Border Background="#15808080" CornerRadius="8" Padding="12,8" MinHeight="120">
           <ItemsControl ItemsSource="{Binding Traffic}">
