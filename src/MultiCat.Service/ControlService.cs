@@ -8,7 +8,8 @@ namespace MultiCat.Service;
 /// <summary>gRPC surface consumed by the GUI over the named pipe.</summary>
 public sealed class ControlService(
     SessionManager sessions,
-    Com0ComManager driver) : MultiCatControl.MultiCatControlBase
+    Com0ComManager driver,
+    MultiCat.Service.OmniRig.OmniRigCoordinator omnirig) : MultiCatControl.MultiCatControlBase
 {
     public override Task<DriverState> GetDriverState(GetDriverStateRequest request, ServerCallContext context)
     {
@@ -21,12 +22,12 @@ public sealed class ControlService(
         });
     }
 
-    public override Task<AddClientPortReply> AddClientPort(AddClientPortRequest request, ServerCallContext context)
+    public override async Task<AddClientPortReply> AddClientPort(AddClientPortRequest request, ServerCallContext context)
     {
         var session = sessions.FindSession(request.Radio);
         if (session is null)
         {
-            return Task.FromResult(new AddClientPortReply { Ok = false, Message = $"unknown radio '{request.Radio}'" });
+            return new AddClientPortReply { Ok = false, Message = $"unknown radio '{request.Radio}'" };
         }
 
         // Network endpoints only — no driver, no elevation. Virtual COM ports are
@@ -34,6 +35,25 @@ public sealed class ControlService(
         var type = request.EndpointType.Length > 0 ? request.EndpointType : "rigctld";
         try
         {
+            if (type == "omnirig")
+            {
+                // OmniRig forwards to a rigctld endpoint — reuse the radio's, or make one.
+                var rig = request.OmnirigRig is 1 or 2 ? request.OmnirigRig : 1;
+                var rigctld = session.EnsureRigctldPort(sessions.PickFreeTcpPort(4532));
+                rigctld.OmnirigRig = rig;
+                omnirig.AssignRig(rig, "127.0.0.1", rigctld.RigctldPort!.Value);
+                sessions.Persist();
+
+                var (regOk, regMsg) = await omnirig.EnsureRegisteredAsync(context.CancellationToken);
+                var message = regOk
+                    ? $"OmniRig Rig {rig} → {rigctld.PortDisplay} ({regMsg})"
+                    : $"OmniRig Rig {rig} → {rigctld.PortDisplay}; {regMsg}";
+                return new AddClientPortReply
+                {
+                    Ok = true, Message = message, PortDisplay = rigctld.PortDisplay, Port = rigctld.RigctldPort.Value,
+                };
+            }
+
             var (basePort, displayPrefix, defaultLabel) = type switch
             {
                 "rigctld" => (4532, "rigctld", "rigctld (WSJT-X, fldigi)"),
@@ -54,14 +74,14 @@ public sealed class ControlService(
 
             session.AddClientPort(port);
             sessions.Persist();
-            return Task.FromResult(new AddClientPortReply
+            return new AddClientPortReply
             {
                 Ok = true, Message = $"{display} ready on localhost:{tcpPort}", PortDisplay = display, Port = tcpPort,
-            });
+            };
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new AddClientPortReply { Ok = false, Message = ex.Message });
+            return new AddClientPortReply { Ok = false, Message = ex.Message };
         }
     }
     public override Task<RadioList> GetRadios(GetRadiosRequest request, ServerCallContext context)
@@ -167,6 +187,7 @@ public sealed class ControlService(
                 MuxPort = port.MuxPort ?? string.Empty,
                 TcpPort = port.TcpPort ?? 0,
                 RigctldPort = port.RigctldPort ?? 0,
+                OmnirigRig = port.OmnirigRig ?? 0,
             });
         }
 
@@ -191,6 +212,7 @@ public sealed class ControlService(
             MuxPort = string.IsNullOrEmpty(p.MuxPort) ? null : p.MuxPort,
             TcpPort = p.TcpPort == 0 ? null : p.TcpPort,
             RigctldPort = p.RigctldPort == 0 ? null : p.RigctldPort,
+            OmnirigRig = p.OmnirigRig == 0 ? null : p.OmnirigRig,
         })],
     };
 

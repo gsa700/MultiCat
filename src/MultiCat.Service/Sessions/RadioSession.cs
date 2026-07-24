@@ -50,6 +50,10 @@ public sealed record ClientPortOptions
 
     /// <summary>hamlib rigctld-protocol listener port on localhost (WSJT-X, fldigi, …).</summary>
     public int? RigctldPort { get; init; }
+
+    /// <summary>1 or 2 when this rigctld port is also exposed through OmniRig as that Rig.
+    /// Mutable so an OmniRig assignment can be added to an existing rigctld port.</summary>
+    public int? OmnirigRig { get; set; }
 }
 
 /// <summary>One radio: transport + arbiter + state tracker + client endpoints, plus an
@@ -280,6 +284,27 @@ public sealed class RadioSession : IAsyncDisposable
         StartClientPort(port);
     }
 
+    /// <summary>Returns an existing rigctld client port, or creates and starts one on
+    /// <paramref name="autoPort"/>. OmniRig needs a rigctld endpoint to forward to.</summary>
+    public ClientPortOptions EnsureRigctldPort(int autoPort)
+    {
+        var existing = Options.ClientPorts.FirstOrDefault(p => p.RigctldPort is not null);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var port = new ClientPortOptions
+        {
+            PortDisplay = $"rigctld {autoPort}",
+            Label = "rigctld (WSJT-X, fldigi)",
+            Ptt = "via CAT",
+            RigctldPort = autoPort,
+        };
+        AddClientPort(port);
+        return port;
+    }
+
     public void RegisterEndpoint(ClientPortEndpoint endpoint) => _endpoints[endpoint] = 0;
 
     public void UnregisterEndpoint(ClientPortEndpoint endpoint) => _endpoints.TryRemove(endpoint, out _);
@@ -304,6 +329,11 @@ public sealed class RadioSession : IAsyncDisposable
                  _rigctldListeners.TryGetValue(port.PortDisplay, out var listener) && listener.ConnectionCount > 0)
         {
             status = $"{listener.ConnectionCount} client(s) on localhost:{rigctldPort}";
+        }
+
+        if (port.OmnirigRig is { } rig)
+        {
+            status = $"{status} · OmniRig Rig {rig}";
         }
 
         return (status, active);

@@ -62,7 +62,13 @@ public partial class MainWindow : Window
 
         var type = new ComboBox
         {
-            ItemsSource = new[] { "rigctld (WSJT-X, fldigi, hamlib)", "raw CAT over TCP" },
+            ItemsSource = new[]
+            {
+                "rigctld (WSJT-X, fldigi, hamlib)",
+                "raw CAT over TCP",
+                "OmniRig Rig 1 (Log4OM, CW Skimmer…)",
+                "OmniRig Rig 2",
+            },
             SelectedIndex = 0,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
@@ -106,9 +112,15 @@ public partial class MainWindow : Window
 
         if (await dialog.ShowDialog<bool>(this))
         {
-            var endpointType = type.SelectedIndex == 1 ? "rawtcp" : "rigctld";
+            var (endpointType, omnirigRig) = type.SelectedIndex switch
+            {
+                1 => ("rawtcp", 0),
+                2 => ("omnirig", 1),
+                3 => ("omnirig", 2),
+                _ => ("rigctld", 0),
+            };
             _ = int.TryParse(port.Text, out var portNumber);
-            await vm.AddPortAsync(endpointType, portNumber, label.Text ?? string.Empty);
+            await vm.AddPortAsync(endpointType, portNumber, label.Text ?? string.Empty, omnirigRig);
         }
     }
 

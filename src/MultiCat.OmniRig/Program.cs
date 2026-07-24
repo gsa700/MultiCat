@@ -155,11 +155,28 @@ static void Unregister()
 
 internal sealed record ServerSettings(string Host, int Rig1Port, int? Rig2Port)
 {
+    /// <summary>Shared config the MultiCAT service writes when a radio is assigned to
+    /// OmniRig. In ProgramData so both processes find it without knowing each other's
+    /// install path. Falls back to a file next to the exe, then to the default.</summary>
+    public static string SharedConfigPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "MultiCAT", "omnirig.settings.json");
+
     public static ServerSettings Load(string exePath)
     {
-        var path = Path.Combine(Path.GetDirectoryName(exePath)!, "omnirig.settings.json");
-        if (File.Exists(path))
+        var candidates = new[]
         {
+            SharedConfigPath,
+            Path.Combine(Path.GetDirectoryName(exePath)!, "omnirig.settings.json"),
+        };
+
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
             try
             {
                 var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));

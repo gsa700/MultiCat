@@ -14,13 +14,15 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
 {
     private readonly ILogger<SessionManager> _logger;
     private readonly RadioConfigStore _store;
+    private readonly OmniRig.OmniRigCoordinator _omnirig;
     private readonly List<RadioSession> _sessions = [];
     private readonly ConcurrentDictionary<Guid, Channel<ActivityEvent>> _subscribers = new();
     private readonly SemaphoreSlim _mutation = new(1, 1);
 
-    public SessionManager(ILogger<SessionManager> logger, IHostEnvironment environment)
+    public SessionManager(ILogger<SessionManager> logger, IHostEnvironment environment, OmniRig.OmniRigCoordinator omnirig)
     {
         _logger = logger;
+        _omnirig = omnirig;
         _store = new RadioConfigStore(Path.Combine(environment.ContentRootPath, "appsettings.json"));
     }
 
@@ -38,6 +40,18 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
         foreach (var config in configs)
         {
             TryStartSession(config);
+        }
+
+        // Re-establish OmniRig mappings so a logger still finds its radio after a restart.
+        foreach (var session in _sessions)
+        {
+            foreach (var port in session.Options.ClientPorts)
+            {
+                if (port is { OmnirigRig: { } rig, RigctldPort: { } rigctldPort })
+                {
+                    _omnirig.AssignRig(rig, "127.0.0.1", rigctldPort);
+                }
+            }
         }
 
         return Task.CompletedTask;

@@ -19,6 +19,7 @@ builder.WebHost.ConfigureKestrel(kestrel =>
 builder.Services.AddGrpc();
 builder.Services.AddSingleton<SessionManager>();
 builder.Services.AddSingleton<MultiCat.Service.VirtualPorts.Com0ComManager>();
+builder.Services.AddSingleton<MultiCat.Service.OmniRig.OmniRigCoordinator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionManager>());
 
 var app = builder.Build();
