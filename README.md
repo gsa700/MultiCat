@@ -51,10 +51,18 @@ Early development — pre-alpha. Working today:
   hamlib 4.7.2 at build time by `tools/HamlibHarvest` — the shipped app contains
   no native hamlib, only the knowledge)
 
-Not yet built: OmniRig-compatible COM server (driverless coverage for N1MM+ and
-friends), CI-V session wiring (the framer exists; sessions are Kenwood-family for
-now), PTT arbitration, applying the selected rig's serial defaults to the
-connection form, first-party virtual COM driver.
+- **OmniRig-compatible COM server** (`MultiCat.OmniRig`): registers as
+  `OmniRig.OmniRigX` (one UAC prompt; machine-wide, because current Windows 11
+  builds no longer honor per-user COM server activation), implements VE3NEA's
+  published interfaces GUID-for-GUID, and forwards to MultiCAT's rigctld
+  endpoint — so N1MM+, Log4OM, CW Skimmer, and friends see "OmniRig" while
+  MultiCAT arbitrates. Verified with both late-bound (IDispatch) and
+  early-bound (vtable/typelib) clients, including COM launch-on-demand
+
+Not yet built: CI-V session wiring (the framer exists; sessions are
+Kenwood-family for now), PTT arbitration, applying the selected rig's serial
+defaults to the connection form, OmniRig event notifications to early-bound
+sinks under load, first-party virtual COM driver.
 
 ### Virtual COM ports and the driver reality
 
@@ -90,6 +98,7 @@ dotnet run --project src/MultiCat.Gui
 | `MultiCat.Hamlib` | Rig capability database harvested from hamlib at build time — no native dependency |
 | `MultiCat.Contracts` | Shared GUI ↔ service contracts |
 | `MultiCat.Service` | The multiplexer host: owns the radio ports, runs sessions |
+| `MultiCat.OmniRig` | OmniRig-compatible COM server bridging OmniRig apps to the mux |
 | `MultiCat.Gui` | Avalonia configuration and monitoring front end |
 | `tests/MultiCat.Core.Tests` | Engine unit tests |
 
@@ -100,6 +109,11 @@ The rig capability database in `MultiCat.Hamlib` is derived from the
 build time from `rigctl --dump-caps`. MultiCAT ships no hamlib code — but the
 knowledge of 300+ rigs' CAT parameters is the Hamlib community's work, and
 this project would be poorer without it.
+
+The OmniRig COM interface definitions and bundled `OmniRig.tlb` come from
+[OmniRig](https://github.com/VE3NEA/OmniRig) by Alex Shovkoplyas VE3NEA (MIT
+license) — the de facto rig-control API of the Windows ham ecosystem, generously
+open-sourced.
 
 ## License
 
