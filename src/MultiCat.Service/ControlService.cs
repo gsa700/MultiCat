@@ -72,6 +72,7 @@ public sealed class ControlService(
                 ConnectionSummary = session.ConnectionSummary,
                 Connected = session.IsConnected,
                 StatusText = session.StatusText,
+                Transmitting = session.IsTransmitting,
             };
 
             foreach (var port in session.Options.ClientPorts)

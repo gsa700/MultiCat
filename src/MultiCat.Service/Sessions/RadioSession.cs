@@ -107,10 +107,12 @@ public sealed class RadioSession : IAsyncDisposable
         {
             long frequency = 0;
             var mode = string.Empty;
+            var ptt = string.Empty;
             if (activity.Kind is ArbiterActivityKind.ResponseReceived or ArbiterActivityKind.Unsolicited)
             {
                 var beforeHz = _tracker.FrequencyHz;
                 var beforeMode = _tracker.Mode;
+                var beforeTx = _tracker.Transmitting;
                 _tracker.Observe(activity.Frame);
                 if (_tracker.FrequencyHz != beforeHz && _tracker.FrequencyHz is { } hz)
                 {
@@ -121,11 +123,18 @@ public sealed class RadioSession : IAsyncDisposable
                 {
                     mode = m;
                 }
+
+                if (_tracker.Transmitting != beforeTx && _tracker.Transmitting is { } tx)
+                {
+                    ptt = tx ? "tx" : "rx";
+                }
             }
 
-            ActivityObserved?.Invoke(this, activity, frequency, mode);
+            ActivityObserved?.Invoke(this, activity, frequency, mode, ptt);
         };
     }
+
+    public bool IsTransmitting => _tracker.Transmitting == true;
 
     public RadioSessionOptions Options { get; }
 
@@ -157,11 +166,12 @@ public sealed class RadioSession : IAsyncDisposable
 
             var freq = _tracker.FrequencyHz is { } hz ? $" · {hz / 1000.0:N2} kHz" : string.Empty;
             var mode = _tracker.Mode is { } m ? $" · {m}" : string.Empty;
-            return $"connected{freq}{mode}";
+            var tx = _tracker.Transmitting == true ? " · ON AIR" : string.Empty;
+            return $"connected{freq}{mode}{tx}";
         }
     }
 
-    public event Action<RadioSession, ArbiterActivity, long, string>? ActivityObserved;
+    public event Action<RadioSession, ArbiterActivity, long, string, string>? ActivityObserved;
 
     public void Start()
     {
@@ -182,6 +192,12 @@ public sealed class RadioSession : IAsyncDisposable
         {
             _loops.Add(PollLoop("n1mm", TimeSpan.FromMilliseconds(250)));
             _loops.Add(PollLoop("wsjtx", TimeSpan.FromMilliseconds(400)));
+        }
+        else
+        {
+            // Fast, dedicated PTT poll so "on air" shows live (virtual-flex's TQX
+            // pattern). PTT can't ride the AI push path, so it must be polled.
+            _loops.Add(PttPollLoop(TimeSpan.FromMilliseconds(200)));
         }
 
         foreach (var port in Options.ClientPorts)
@@ -303,6 +319,21 @@ public sealed class RadioSession : IAsyncDisposable
             {
                 await Arbiter.ExecuteAsync(clientId, CatFrame.FromAscii("FA;"), _cts.Token);
                 await Arbiter.ExecuteAsync(clientId, CatFrame.FromAscii("MD;"), _cts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task PttPollLoop(TimeSpan interval)
+    {
+        using var timer = new PeriodicTimer(interval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                await Arbiter.ExecuteAsync("ptt", CatFrame.FromAscii("TQX;"), _cts.Token);
             }
         }
         catch (OperationCanceledException)

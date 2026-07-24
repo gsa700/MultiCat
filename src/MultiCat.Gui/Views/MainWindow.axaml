@@ -56,6 +56,10 @@
           <StackPanel Orientation="Horizontal" Spacing="10">
             <TextBlock Text="Radio connection" FontSize="13" FontWeight="Medium" VerticalAlignment="Bottom" />
             <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#3B9E5F" VerticalAlignment="Bottom" />
+            <Border Background="#C0392B" CornerRadius="4" Padding="8,2" VerticalAlignment="Bottom"
+                    IsVisible="{Binding IsTransmitting}">
+              <TextBlock Text="ON AIR" FontSize="11" FontWeight="Medium" Foreground="White" />
+            </Border>
           </StackPanel>
         </DockPanel>
 

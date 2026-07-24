@@ -49,4 +49,24 @@ public class RadioStateTrackerTests
         Assert.Null(_tracker.FrequencyHz);
         Assert.Null(_tracker.Mode);
     }
+
+    [Fact]
+    public void TransmitQuery_RaisesTransmitChanged()
+    {
+        var states = new List<bool>();
+        _tracker.TransmitChanged += tx => states.Add(tx);
+
+        _tracker.Observe(CatFrame.FromAscii("TQ1;"));
+        _tracker.Observe(CatFrame.FromAscii("TQ1;")); // no change, no event
+        _tracker.Observe(CatFrame.FromAscii("TQ0;"));
+
+        Assert.Equal([true, false], states);
+        Assert.False(_tracker.Transmitting);
+    }
+
+    [Fact]
+    public void Transmitting_StartsUnknown()
+    {
+        Assert.Null(_tracker.Transmitting);
+    }
 }

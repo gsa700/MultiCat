@@ -19,15 +19,33 @@ public sealed class RadioStateTracker
 
     public string? Mode { get; private set; }
 
+    /// <summary>True while transmitting, false while receiving, null until first known.</summary>
+    public bool? Transmitting { get; private set; }
+
     public event Action<long>? FrequencyChanged;
 
     public event Action<string>? ModeChanged;
+
+    public event Action<bool>? TransmitChanged;
 
     public void Observe(CatFrame frame)
     {
         var text = frame.ToAscii();
         if (text.Length < 3 || !text.EndsWith(';'))
         {
+            return;
+        }
+
+        // Elecraft transmit query: TQ0; = receive, TQ1; = transmit.
+        if (text.StartsWith("TQ") && text.Length == 4 && text[2] is '0' or '1')
+        {
+            var tx = text[2] == '1';
+            if (tx != Transmitting)
+            {
+                Transmitting = tx;
+                TransmitChanged?.Invoke(tx);
+            }
+
             return;
         }
 

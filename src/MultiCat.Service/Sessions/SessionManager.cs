@@ -159,7 +159,7 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
         }
     }
 
-    private void OnActivity(RadioSession session, ArbiterActivity activity, long frequencyHz, string mode)
+    private void OnActivity(RadioSession session, ArbiterActivity activity, long frequencyHz, string mode, string ptt)
     {
         if (_subscribers.IsEmpty)
         {
@@ -176,6 +176,7 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
             Note = NoteFor(activity.Kind),
             FrequencyHz = frequencyHz,
             Mode = mode,
+            Ptt = ptt,
         };
 
         foreach (var channel in _subscribers.Values)

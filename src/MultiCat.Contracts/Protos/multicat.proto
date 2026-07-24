@@ -51,6 +51,7 @@ message RadioInfo {
   bool connected = 3;
   string status_text = 4;
   repeated ClientPortInfo ports = 5;
+  bool transmitting = 6;
 }
 
 message ClientPortInfo {
@@ -121,4 +122,5 @@ message ActivityEvent {
   string note = 6;
   int64 frequency_hz = 7;   // 0 when unchanged
   string mode = 8;          // empty when unchanged
+  string ptt = 9;           // "tx", "rx", or empty when unchanged
 }

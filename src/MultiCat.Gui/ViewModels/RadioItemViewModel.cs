@@ -14,6 +14,9 @@ public partial class RadioItemViewModel : ViewModelBase
     [ObservableProperty]
     public partial string StatusText { get; set; } = "idle";
 
+    [ObservableProperty]
+    public partial bool IsTransmitting { get; set; }
+
     public long? LastFrequencyHz { get; set; }
 
     public string? LastMode { get; set; }

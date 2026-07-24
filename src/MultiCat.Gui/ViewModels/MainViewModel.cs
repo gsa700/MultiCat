@@ -246,11 +246,17 @@ public partial class MainViewModel : ViewModelBase
             radio.LastMode = evt.Mode;
         }
 
-        if (evt.FrequencyHz > 0 || evt.Mode.Length > 0)
+        if (evt.Ptt.Length > 0)
+        {
+            radio.IsTransmitting = evt.Ptt == "tx";
+        }
+
+        if (evt.FrequencyHz > 0 || evt.Mode.Length > 0 || evt.Ptt.Length > 0)
         {
             var freq = radio.LastFrequencyHz is { } hz ? $" · {hz / 1000.0:N2} kHz" : string.Empty;
             var mode = radio.LastMode is { } m ? $" · {m}" : string.Empty;
-            radio.StatusText = $"connected{freq}{mode}";
+            var tx = radio.IsTransmitting ? " · ON AIR" : string.Empty;
+            radio.StatusText = $"connected{freq}{mode}{tx}";
         }
     }
 
@@ -262,6 +268,7 @@ public partial class MainViewModel : ViewModelBase
             ConnectionSummary = radio.ConnectionSummary,
             IsConnected = radio.Connected,
             StatusText = radio.StatusText,
+            IsTransmitting = radio.Transmitting,
             SelectedRigModel = RigList.IndexOf(radio.Name),
             PortChoices = [radio.ConnectionSummary.Split(" · ")[0]],
         };

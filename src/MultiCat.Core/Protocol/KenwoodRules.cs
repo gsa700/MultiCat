@@ -23,10 +23,23 @@ public sealed class KenwoodRules : ICatProtocolRules
     public bool IsResponseTo(CatFrame response, CatFrame command)
     {
         var commandPrefix = GetPrefix(command);
-        return commandPrefix.Length > 0 && GetPrefix(response) == commandPrefix;
+        if (commandPrefix.Length == 0)
+        {
+            return false;
+        }
+
+        // The Elecraft transmit query "TQX;" is answered "TQ0;"/"TQ1;".
+        if (commandPrefix == "TQX")
+        {
+            return GetPrefix(response) == "TQ";
+        }
+
+        return GetPrefix(response) == commandPrefix;
     }
 
-    public bool IsCacheable(CatFrame command) => ExpectsResponse(command);
+    // PTT must never be served from cache — a stale "receive" would hide a live
+    // transmit. Everything else that expects a response is cacheable.
+    public bool IsCacheable(CatFrame command) => ExpectsResponse(command) && GetPrefix(command) != "TQX";
 
     private static string GetPrefix(CatFrame frame)
     {
