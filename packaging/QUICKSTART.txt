@@ -1,0 +1,62 @@
+MultiCAT 0.1.0-alpha — Quick Start
+==================================
+
+One radio, many apps. MultiCAT owns your radio's CAT port and shares it with
+as many programs as you like. Pre-alpha: expect rough edges. Windows x64 only.
+No .NET install needed — everything is bundled.
+
+WHAT'S IN THIS FOLDER
+  Start MultiCAT.cmd        Starts the background service, then the app window.
+  MultiCat.Service\         The multiplexer service (owns the radio, runs endpoints).
+  MultiCat.Gui\             The MultiCAT window (status, ports, live traffic).
+  MultiCat.OmniRig\         Optional OmniRig-compatible COM server + register scripts.
+  appsettings.example-real-radio.json   Template for connecting a real radio.
+
+
+1. TRY IT WITH THE BUILT-IN SIMULATED RADIO
+   Double-click "Start MultiCAT.cmd". The window opens showing a simulated
+   Elecraft K3 whose frequency drifts on its own. This needs no hardware and
+   confirms everything runs on your machine.
+
+
+2. CONNECT A REAL RADIO
+   a. Close MultiCAT (close the window; the service stops with it — or end
+      MultiCat.Service in Task Manager).
+   b. Open MultiCat.Service\appsettings.json in Notepad.
+   c. Replace the "Radios" section with a real-radio entry — copy from
+      appsettings.example-real-radio.json in this folder. Set:
+        "Simulator": false
+        "ComPort":   your radio's CAT COM port (e.g. "COM7")
+        "BaudRate":  your radio's CAT baud rate (e.g. 38400)
+        "Protocol":  "Kenwood" for Kenwood/Elecraft, "IcomCiv" for Icom
+   d. Save and run "Start MultiCAT.cmd" again.
+
+   MultiCAT opens the radio and the status line shows its live frequency.
+
+
+3. POINT YOUR SOFTWARE AT MULTICAT (no COM driver needed)
+   MultiCAT exposes your radio over the network so multiple apps share it:
+
+   WSJT-X / JTDX / fldigi / GridTracker / any hamlib app:
+     Rig: "Hamlib NET rigctl"
+     Network Server: 127.0.0.1:4532
+
+   Log4OM / CW Skimmer / SDR Console / other OmniRig apps:
+     Run "MultiCat.OmniRig\Register OmniRig.cmd" once (accept the prompt),
+     then choose OmniRig / "Rig 1" in the app.
+
+   Anything that speaks raw CAT over TCP: 127.0.0.1:4533
+
+   The Traffic monitor in the MultiCAT window shows every app's requests as
+   they happen, so you can see the sharing working.
+
+
+KNOWN LIMITS IN THIS PRE-ALPHA
+  - Radios are configured by editing appsettings.json (no GUI editor yet).
+  - Real virtual COM ports (for apps like N1MM+ that only speak serial) need a
+    signed com0com/VSP driver, which current Windows 11 builds reject. The
+    network endpoints above are the recommended path and need no driver.
+  - The OmniRig server works with most OmniRig apps; WSJT-X's OmniRig backend
+    is not yet supported (use the rigctld path above for WSJT-X).
+
+Source, license (GPLv3), and issues: https://github.com/gsa700/MultiCat

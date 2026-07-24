@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.0-alpha</Version>
+    <Product>MultiCAT</Product>
+    <Company>gsa700</Company>
+    <Authors>gsa700</Authors>
+    <Copyright>Copyright (C) 2026 gsa700. GPLv3.</Copyright>
+  </PropertyGroup>
+</Project>
