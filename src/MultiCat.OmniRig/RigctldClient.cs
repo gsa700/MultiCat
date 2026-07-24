@@ -93,6 +93,14 @@ public sealed class RigctldClient(string host, int port) : IDisposable
 
     public bool SetFrequency(long hz) => Exchange($"F {hz}", 1) is not null;
 
+    public long? GetFrequencyB()
+    {
+        var reply = Exchange("i", 1);
+        return reply is not null && long.TryParse(reply[0], out var hz) ? hz : null;
+    }
+
+    public bool SetFrequencyB(long hz) => Exchange($"I {hz}", 1) is not null;
+
     public string? GetMode() => Exchange("m", 2)?[0];
 
     public bool SetMode(string mode) => Exchange($"M {mode} 0", 1) is not null;

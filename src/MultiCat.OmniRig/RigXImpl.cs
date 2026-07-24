@@ -8,7 +8,7 @@ namespace MultiCat.OmniRig;
 public sealed class RigXImpl : IRigX
 {
     private const RigParamX SupportedParams =
-        RigParamX.PM_FREQ | RigParamX.PM_FREQA | RigParamX.PM_RX | RigParamX.PM_TX |
+        RigParamX.PM_FREQ | RigParamX.PM_FREQA | RigParamX.PM_FREQB | RigParamX.PM_RX | RigParamX.PM_TX |
         RigParamX.PM_CW_U | RigParamX.PM_CW_L | RigParamX.PM_SSB_U | RigParamX.PM_SSB_L |
         RigParamX.PM_DIG_U | RigParamX.PM_DIG_L | RigParamX.PM_AM | RigParamX.PM_FM;
 
@@ -20,6 +20,7 @@ public sealed class RigXImpl : IRigX
     private readonly PortBitsImpl _portBits = new();
 
     private long _lastFreq;
+    private long _lastFreqB;
     private string _lastMode = "USB";
     private bool _lastPtt;
     private RigStatusX _lastStatus = RigStatusX.ST_NOTCONFIGURED;
@@ -65,6 +66,13 @@ public sealed class RigXImpl : IRigX
         {
             _lastFreq = freq.Value;
             changed |= (int)(RigParamX.PM_FREQ | RigParamX.PM_FREQA);
+        }
+
+        var freqB = _client.GetFrequencyB();
+        if (freqB is not null && freqB.Value != _lastFreqB)
+        {
+            _lastFreqB = freqB.Value;
+            changed |= (int)RigParamX.PM_FREQB;
         }
 
         var mode = _client.GetMode();
@@ -134,9 +142,13 @@ public sealed class RigXImpl : IRigX
         _ => "On-line",
     };
 
+    // Getter returns the cached value the 500 ms poll keeps fresh — never a live
+    // call. A client reading Freq inside its ParamsChange handler is a re-entrant
+    // COM call; doing network I/O there (and racing the poll through the arbiter's
+    // cache) returns inconsistent values and clients like Log4OM discard them.
     public int Freq
     {
-        get => (int)(_client?.GetFrequency() ?? _lastFreq);
+        get => (int)_lastFreq;
         set
         {
             if (_client?.SetFrequency(value) == true)
@@ -152,7 +164,17 @@ public sealed class RigXImpl : IRigX
         set => Freq = value;
     }
 
-    public int FreqB { get; set; }
+    public int FreqB
+    {
+        get => (int)_lastFreqB; // cached; the poll keeps it fresh
+        set
+        {
+            if (_client?.SetFrequencyB(value) == true)
+            {
+                _lastFreqB = value;
+            }
+        }
+    }
 
     public int RitOffset { get; set; }
 
@@ -196,16 +218,7 @@ public sealed class RigXImpl : IRigX
 
     public RigParamX Mode
     {
-        get
-        {
-            var mode = _client?.GetMode();
-            if (mode is not null)
-            {
-                _lastMode = mode;
-            }
-
-            return ModeToParam(_lastMode);
-        }
+        get => ModeToParam(_lastMode); // cached; the poll keeps _lastMode fresh
         set
         {
             if (ParamToMode(value) is { } mode && _client?.SetMode(mode) == true)

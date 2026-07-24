@@ -83,6 +83,23 @@ public sealed class RigctldTranslator(TransactionArbiter arbiter, string clientI
                 return Report(0);
             }
 
+            // VFO B frequency. rigctld's split-freq command is the standard way to
+            // read the "other" VFO; on Kenwood/Elecraft that's FB;.
+            case "i" or "\\get_split_freq":
+            {
+                var response = await arbiter.ExecuteAsync(clientId, CatFrame.FromAscii("FB;"), cancellationToken);
+                return response is { } frame && frame.Length == 14 && long.TryParse(frame.ToAscii().AsSpan(2, 11), out var hzB)
+                    ? $"{hzB}\n"
+                    : Report(-5);
+            }
+
+            case "I" or "\\set_split_freq" when parts.Length >= 2 &&
+                double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var setHzB):
+            {
+                await arbiter.ExecuteAsync(clientId, CatFrame.FromAscii($"FB{(long)setHzB:00000000000};"), cancellationToken);
+                return Report(0);
+            }
+
             case "m" or "\\get_mode":
             {
                 var response = await arbiter.ExecuteAsync(clientId, CatFrame.FromAscii("MD;"), cancellationToken);
