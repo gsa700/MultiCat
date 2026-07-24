@@ -28,7 +28,9 @@ suites are single-brand and closed source. MultiCAT aims at the missing combinat
 
 ## Status
 
-Early development — pre-alpha. Working today:
+Early development — pre-alpha.
+
+Working today:
 
 - Core engine: Kenwood/Elecraft and Icom CI-V framers, transaction arbiter,
   short-TTL poll cache, client port endpoints, radio state tracker with
