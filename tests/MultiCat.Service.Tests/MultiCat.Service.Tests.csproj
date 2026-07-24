@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MultiCat.Service\MultiCat.Service.csproj" />
+    <ProjectReference Include="..\..\src\MultiCat.Hamlib\MultiCat.Hamlib.csproj" />
   </ItemGroup>
 
 </Project>

@@ -170,7 +170,7 @@ public partial class MainViewModel : ViewModelBase
             ConnectionSummary = radio.ConnectionSummary,
             IsConnected = radio.Connected,
             StatusText = radio.StatusText,
-            RigModels = [radio.Name.Replace(" (simulated)", string.Empty)],
+            SelectedRigModel = RigList.IndexOf(radio.Name),
             PortChoices = [radio.ConnectionSummary.Split(" · ")[0]],
         };
 
@@ -197,7 +197,7 @@ public partial class MainViewModel : ViewModelBase
             ConnectionSummary = "COM7 · demo",
             IsConnected = true,
             StatusText = "demo · 14,074.00 kHz · USB",
-            RigModels = ["Elecraft K3"],
+            SelectedRigModel = RigList.IndexOf("Elecraft K3"),
             PortChoices = ["COM7 — FTDI"],
             Ports =
             [

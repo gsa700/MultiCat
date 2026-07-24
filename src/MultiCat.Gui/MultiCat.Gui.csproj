@@ -28,5 +28,6 @@
   <ItemGroup>
     <ProjectReference Include="..\MultiCat.Core\MultiCat.Core.csproj" />
     <ProjectReference Include="..\MultiCat.Contracts\MultiCat.Contracts.csproj" />
+    <ProjectReference Include="..\MultiCat.Hamlib\MultiCat.Hamlib.csproj" />
   </ItemGroup>
 </Project>

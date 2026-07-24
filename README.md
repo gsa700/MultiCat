@@ -44,10 +44,14 @@ Early development — pre-alpha. Working today:
   Add port, and a streaming traffic monitor (falls back to demo data when the
   service is offline)
 
+- Rig picker backed by hamlib's full rig database (311 models, harvested from
+  hamlib 4.7.2 at build time by `tools/HamlibHarvest` — the shipped app contains
+  no native hamlib, only the knowledge)
+
 Not yet built: OmniRig-compatible COM server (driverless coverage for N1MM+ and
-friends), hamlib rig database enumeration, CI-V session wiring (the framer exists;
-sessions are Kenwood-family for now), PTT arbitration, first-party virtual COM
-driver.
+friends), CI-V session wiring (the framer exists; sessions are Kenwood-family for
+now), PTT arbitration, applying the selected rig's serial defaults to the
+connection form, first-party virtual COM driver.
 
 ### Virtual COM ports and the driver reality
 
@@ -80,11 +84,19 @@ dotnet run --project src/MultiCat.Gui
 | Project | Purpose |
 | --- | --- |
 | `MultiCat.Core` | Framers, transaction arbiter, poll cache, state tracker — no I/O dependencies |
-| `MultiCat.Hamlib` | P/Invoke bindings to libhamlib and rig database enumeration |
+| `MultiCat.Hamlib` | Rig capability database harvested from hamlib at build time — no native dependency |
 | `MultiCat.Contracts` | Shared GUI ↔ service contracts |
 | `MultiCat.Service` | The multiplexer host: owns the radio ports, runs sessions |
 | `MultiCat.Gui` | Avalonia configuration and monitoring front end |
 | `tests/MultiCat.Core.Tests` | Engine unit tests |
+
+## Credits
+
+The rig capability database in `MultiCat.Hamlib` is derived from the
+[Hamlib project](https://hamlib.github.io) (LGPL-2.1-or-later), harvested at
+build time from `rigctl --dump-caps`. MultiCAT ships no hamlib code — but the
+knowledge of 300+ rigs' CAT parameters is the Hamlib community's work, and
+this project would be poorer without it.
 
 ## License
 

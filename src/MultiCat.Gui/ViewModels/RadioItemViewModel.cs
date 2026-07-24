@@ -27,7 +27,7 @@ public partial class RadioItemViewModel : ViewModelBase
     /// <summary>Call after mutating Ports so the signal-flow diagram re-reads its labels.</summary>
     public void OnPortsChanged() => OnPropertyChanged(nameof(FlowPortLabels));
 
-    public string[] RigModels { get; init; } = ["Elecraft K3"];
+    public string[] RigModels { get; init; } = Services.RigList.DisplayNames;
 
     public string[] ConnectionKinds { get; } = ["Serial (COM)", "Network (TCP)"];
 
