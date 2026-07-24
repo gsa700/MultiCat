@@ -2,6 +2,8 @@
 
 *One radio, many owners.*
 
+![MultiCAT sharing one radio with several apps — live signal flow and traffic monitor](docs/multicat.gif)
+
 MultiCAT is a graphical CAT multiplexer for Windows: it takes exclusive ownership of a
 radio's CAT port, then shares that radio with as many applications as you like — each
 one convinced it has the rig to itself. Configure your rig from the hamlib database,
