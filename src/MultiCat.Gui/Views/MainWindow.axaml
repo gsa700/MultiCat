@@ -93,9 +93,7 @@
         <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="4">
           <controls:SignalFlowControl Height="170"
                                       RadioName="{Binding Name}"
-                                      Ports="{Binding FlowPortLabels}"
-                                      ToRadioTick="{Binding ToRadioTick}"
-                                      FromRadioTick="{Binding FromRadioTick}" />
+                                      Ports="{Binding FlowPortLabels}" />
         </Border>
 
         <DockPanel>
@@ -106,7 +104,7 @@
 
         <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8">
           <StackPanel>
-            <Grid ColumnDefinitions="100,*,110,90" Margin="12,6">
+            <Grid ColumnDefinitions="90,2*,90,3*" Margin="12,6">
               <TextBlock Grid.Column="0" Text="Port" FontSize="11" Foreground="#8E8E8E" />
               <TextBlock Grid.Column="1" Text="Label" FontSize="11" Foreground="#8E8E8E" />
               <TextBlock Grid.Column="2" Text="PTT" FontSize="11" Foreground="#8E8E8E" />
@@ -116,12 +114,15 @@
             <ItemsControl ItemsSource="{Binding Ports}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ClientPortViewModel">
-                  <Grid ColumnDefinitions="100,*,110,90" Margin="12,7">
+                  <Grid ColumnDefinitions="90,2*,90,3*" Margin="12,7">
                     <TextBlock Grid.Column="0" Text="{Binding PortDisplay}" FontSize="13"
-                               FontFamily="Cascadia Mono,Consolas" />
-                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="13" />
-                    <TextBlock Grid.Column="2" Text="{Binding Ptt}" FontSize="12" Foreground="#8E8E8E" />
+                               FontFamily="Cascadia Mono,Consolas" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="13"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="2" Text="{Binding Ptt}" FontSize="12" Foreground="#8E8E8E"
+                               VerticalAlignment="Center" />
                     <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="12"
+                               VerticalAlignment="Center" TextWrapping="Wrap"
                                Foreground="{Binding IsActive, Converter={x:Static vm:Converters.ActiveBrush}}" />
                   </Grid>
                 </DataTemplate>

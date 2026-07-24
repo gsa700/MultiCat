@@ -17,27 +17,12 @@ public partial class RadioItemViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsTransmitting { get; set; }
 
-    // Separate counters per direction so the signal-flow diagram pulses in step
-    // with actual traffic on the radio↔hub link: commands flow toward the radio,
-    // responses flow back toward the hub. Two counters (not a value + direction)
-    // so each carries its own change notification and there's no ordering race.
-    [ObservableProperty]
-    public partial long ToRadioTick { get; set; }
+    /// <summary>Raised per real activity event to pulse the signal-flow diagram.
+    /// link 0 = radio↔hub, link N = the Nth client port; towardRadio picks direction
+    /// (amber command toward the radio/hub end, teal response toward the far end).</summary>
+    public event Action<int, bool>? PulseRequested;
 
-    [ObservableProperty]
-    public partial long FromRadioTick { get; set; }
-
-    public void RegisterActivity(bool fromRadio)
-    {
-        if (fromRadio)
-        {
-            FromRadioTick++;
-        }
-        else
-        {
-            ToRadioTick++;
-        }
-    }
+    public void Pulse(int link, bool towardRadio) => PulseRequested?.Invoke(link, towardRadio);
 
     public long? LastFrequencyHz { get; set; }
 

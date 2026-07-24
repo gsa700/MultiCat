@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using MultiCat.Gui.ViewModels;
 
 namespace MultiCat.Gui.Controls;
 
@@ -20,20 +21,11 @@ public class SignalFlowControl : Control
     public static readonly StyledProperty<IEnumerable<string>?> PortsProperty =
         AvaloniaProperty.Register<SignalFlowControl, IEnumerable<string>?>(nameof(Ports));
 
-    /// <summary>Bumped by the view model per real event; a rising value spawns one
-    /// pulse in that direction, so the animation tracks actual traffic, not a timer.</summary>
-    public static readonly StyledProperty<long> ToRadioTickProperty =
-        AvaloniaProperty.Register<SignalFlowControl, long>(nameof(ToRadioTick));
-
-    public static readonly StyledProperty<long> FromRadioTickProperty =
-        AvaloniaProperty.Register<SignalFlowControl, long>(nameof(FromRadioTick));
-
     private static readonly IBrush CommandBrush = new SolidColorBrush(Color.Parse("#EF9F27"));
     private static readonly IBrush ResponseBrush = new SolidColorBrush(Color.Parse("#1D9E75"));
     private static readonly IPen LinkPen = new Pen(new SolidColorBrush(Color.Parse("#808080"), 0.35), 1.5);
 
     private readonly List<Pulse> _pulses = [];
-    private readonly Random _random = new();
     private DispatcherTimer? _timer;
 
     static SignalFlowControl()
@@ -53,39 +45,31 @@ public class SignalFlowControl : Control
         set => SetValue(PortsProperty, value);
     }
 
-    public long ToRadioTick
-    {
-        get => GetValue(ToRadioTickProperty);
-        set => SetValue(ToRadioTickProperty, value);
-    }
+    private RadioItemViewModel? _boundVm;
 
-    public long FromRadioTick
+    protected override void OnDataContextChanged(EventArgs e)
     {
-        get => GetValue(FromRadioTickProperty);
-        set => SetValue(FromRadioTickProperty, value);
-    }
-
-    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-    {
-        base.OnPropertyChanged(change);
-        // Ignore the initial 0-binding when the control first attaches to a radio.
-        if (change.Property == ToRadioTickProperty && change.GetOldValue<long>() != 0)
+        base.OnDataContextChanged(e);
+        if (_boundVm is not null)
         {
-            SpawnPulse(towardRadio: true);
+            _boundVm.PulseRequested -= OnPulse;
         }
-        else if (change.Property == FromRadioTickProperty && change.GetOldValue<long>() != 0)
+
+        _boundVm = DataContext as RadioItemViewModel;
+        if (_boundVm is not null)
         {
-            SpawnPulse(towardRadio: false);
+            _boundVm.PulseRequested += OnPulse;
         }
     }
 
-    // Both directions ride the radio↔hub link (link 0): amber toward the radio
-    // for commands, teal back toward the hub for responses.
-    private void SpawnPulse(bool towardRadio)
+    /// <summary>A real activity event asks for a pulse on a given link. Link 0 is the
+    /// radio↔hub link; link N (1-based) is the Nth client port. TowardRadio moves the
+    /// pulse toward the radio/hub end (amber = command), else toward the far end (teal).</summary>
+    private void OnPulse(int link, bool towardRadio)
     {
-        if (_pulses.Count < 12)
+        if (_pulses.Count < 32)
         {
-            _pulses.Add(new Pulse { Link = 0, TowardRadio = towardRadio });
+            _pulses.Add(new Pulse { Link = link, TowardRadio = towardRadio });
         }
     }
 
@@ -107,6 +91,12 @@ public class SignalFlowControl : Control
     {
         _timer?.Stop();
         _timer = null;
+        if (_boundVm is not null)
+        {
+            _boundVm.PulseRequested -= OnPulse;
+            _boundVm = null;
+        }
+
         base.OnDetachedFromVisualTree(e);
     }
 
