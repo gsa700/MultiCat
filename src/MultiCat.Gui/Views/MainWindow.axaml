@@ -21,7 +21,6 @@
       <DockPanel Margin="8">
         <StackPanel DockPanel.Dock="Bottom" Margin="8,6,0,2" Spacing="2">
           <TextBlock Text="{Binding ServiceStatus}" FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding DriverStatus}" FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap" />
         </StackPanel>
         <Button DockPanel.Dock="Bottom" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center" Margin="0,8,0,0"
@@ -98,7 +97,7 @@
 
         <DockPanel>
           <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5"
-                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).AddPortCommand}">+ Add port</Button>
+                  Click="OnAddPort">+ Add port</Button>
           <TextBlock Text="Client ports" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
         </DockPanel>
 

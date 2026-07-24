@@ -53,6 +53,65 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnAddPort(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { CanEdit: true } vm || vm.SelectedRadio is null)
+        {
+            return;
+        }
+
+        var type = new ComboBox
+        {
+            ItemsSource = new[] { "rigctld (WSJT-X, fldigi, hamlib)", "raw CAT over TCP" },
+            SelectedIndex = 0,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+        };
+        var port = new TextBox { Watermark = "auto (leave blank)", Width = 160, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var label = new TextBox { Watermark = "optional", Width = 260, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+
+        var dialog = new Window
+        {
+            Title = "Add network port",
+            Width = 360,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        var add = new Button { Content = "Add", MinWidth = 80, IsDefault = true };
+        var cancel = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true };
+        add.Click += (_, _) => dialog.Close(true);
+        cancel.Click += (_, _) => dialog.Close(false);
+        dialog.Content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(18),
+            Spacing = 10,
+            Children =
+            {
+                new TextBlock { Text = "Endpoint", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
+                type,
+                new TextBlock { Text = "TCP port", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
+                port,
+                new TextBlock { Text = "Label", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
+                label,
+                new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Margin = new Avalonia.Thickness(0, 6, 0, 0),
+                    Children = { cancel, add },
+                },
+            },
+        };
+
+        if (await dialog.ShowDialog<bool>(this))
+        {
+            var endpointType = type.SelectedIndex == 1 ? "rawtcp" : "rigctld";
+            _ = int.TryParse(port.Text, out var portNumber);
+            await vm.AddPortAsync(endpointType, portNumber, label.Text ?? string.Empty);
+        }
+    }
+
     private async void OnDeleteRadio(object? sender, RoutedEventArgs e)
     {
         if (ViewModel is not { CanEdit: true } vm || vm.SelectedRadio is null)

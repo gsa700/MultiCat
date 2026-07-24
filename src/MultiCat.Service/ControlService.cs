@@ -21,45 +21,48 @@ public sealed class ControlService(
         });
     }
 
-    public override async Task<AddClientPortReply> AddClientPort(AddClientPortRequest request, ServerCallContext context)
+    public override Task<AddClientPortReply> AddClientPort(AddClientPortRequest request, ServerCallContext context)
     {
         var session = sessions.FindSession(request.Radio);
         if (session is null)
         {
-            return new AddClientPortReply { Ok = false, Message = $"unknown radio '{request.Radio}'" };
+            return Task.FromResult(new AddClientPortReply { Ok = false, Message = $"unknown radio '{request.Radio}'" });
         }
 
-        if (!driver.IsInstalled)
+        // Network endpoints only — no driver, no elevation. Virtual COM ports are
+        // config-file only now (the com0com seam remains for a future signed driver).
+        var type = request.EndpointType.Length > 0 ? request.EndpointType : "rigctld";
+        try
         {
-            return new AddClientPortReply
+            var (basePort, displayPrefix, defaultLabel) = type switch
             {
-                Ok = false,
-                Message = "Virtual COM driver not installed — see Settings for setup",
+                "rigctld" => (4532, "rigctld", "rigctld (WSJT-X, fldigi)"),
+                "rawtcp" => (4600, "raw TCP", "raw CAT over TCP"),
+                _ => throw new ArgumentException($"unknown endpoint type '{type}'"),
             };
-        }
 
-        var (appPort, muxPort) = Com0ComManager.PickFreePair(sessions.KnownPortNames());
-        var created = await driver.CreatePairAsync(appPort, muxPort, context.CancellationToken);
-        if (!created)
-        {
-            return new AddClientPortReply
+            var tcpPort = request.Port > 0 ? request.Port : sessions.PickFreeTcpPort(basePort);
+            var display = $"{displayPrefix} {tcpPort}";
+            var port = new ClientPortOptions
             {
-                Ok = false,
-                Message = $"Could not create {appPort} — elevation declined or driver error",
+                PortDisplay = display,
+                Label = request.Label.Length > 0 ? request.Label : defaultLabel,
+                Ptt = "via CAT",
+                RigctldPort = type == "rigctld" ? tcpPort : null,
+                TcpPort = type == "rawtcp" ? tcpPort : null,
             };
+
+            session.AddClientPort(port);
+            sessions.Persist();
+            return Task.FromResult(new AddClientPortReply
+            {
+                Ok = true, Message = $"{display} ready on localhost:{tcpPort}", PortDisplay = display, Port = tcpPort,
+            });
         }
-
-        var port = new ClientPortOptions
+        catch (Exception ex)
         {
-            PortDisplay = appPort,
-            Label = request.Label.Length > 0 ? request.Label : appPort,
-            Ptt = request.Ptt.Length > 0 ? request.Ptt : "CAT only",
-            MuxPort = muxPort,
-        };
-        session.AddClientPort(port);
-        sessions.Persist();
-
-        return new AddClientPortReply { Ok = true, Message = $"{appPort} ready", PortDisplay = appPort };
+            return Task.FromResult(new AddClientPortReply { Ok = false, Message = ex.Message });
+        }
     }
     public override Task<RadioList> GetRadios(GetRadiosRequest request, ServerCallContext context)
     {

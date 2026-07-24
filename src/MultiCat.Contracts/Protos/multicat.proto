@@ -31,14 +31,17 @@ message DriverState {
 
 message AddClientPortRequest {
   string radio = 1;
-  string label = 2;
-  string ptt = 3;
+  string endpoint_type = 2;   // "rigctld" | "rawtcp" | "omnirig"
+  int32 port = 3;             // 0 = auto-pick (rigctld/rawtcp)
+  string label = 4;
+  int32 omnirig_rig = 5;      // 1 or 2 (omnirig assignment)
 }
 
 message AddClientPortReply {
   bool ok = 1;
   string message = 2;
   string port_display = 3;
+  int32 port = 4;
 }
 
 message RadioList {

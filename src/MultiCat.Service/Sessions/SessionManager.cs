@@ -199,6 +199,37 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
     public RadioSession? FindSession(string radioName) =>
         _sessions.FirstOrDefault(s => s.Options.Name == radioName);
 
+    /// <summary>Lowest free localhost TCP port at or above <paramref name="basePort"/>,
+    /// skipping ports already claimed by any radio's client endpoints and any port
+    /// currently bound on the machine.</summary>
+    public int PickFreeTcpPort(int basePort)
+    {
+        var claimed = new HashSet<int>();
+        foreach (var session in _sessions)
+        {
+            foreach (var port in session.Options.ClientPorts)
+            {
+                if (port.RigctldPort is { } r) claimed.Add(r);
+                if (port.TcpPort is { } t) claimed.Add(t);
+            }
+        }
+
+        var systemBusy = System.Net.NetworkInformation.IPGlobalProperties
+            .GetIPGlobalProperties().GetActiveTcpListeners()
+            .Where(e => e.Address.Equals(System.Net.IPAddress.Loopback) || e.Address.Equals(System.Net.IPAddress.Any))
+            .Select(e => e.Port).ToHashSet();
+
+        for (var p = basePort; p < basePort + 500; p++)
+        {
+            if (!claimed.Contains(p) && !systemBusy.Contains(p))
+            {
+                return p;
+            }
+        }
+
+        throw new InvalidOperationException($"No free TCP port found at or above {basePort}");
+    }
+
     /// <summary>Every COM name the mux must avoid: real system ports, names reserved
     /// in the COM Name Arbiter database (com0com refuses those), and both sides of
     /// every configured client port.</summary>

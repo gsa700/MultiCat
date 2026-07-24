@@ -38,9 +38,6 @@ public partial class MainViewModel : ViewModelBase
     public partial string ServiceStatus { get; set; } = "connecting to service…";
 
     [ObservableProperty]
-    public partial string DriverStatus { get; set; } = string.Empty;
-
-    [ObservableProperty]
     public partial bool IsLive { get; set; }
 
     [ObservableProperty]
@@ -154,8 +151,9 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private async Task AddPortAsync()
+    /// <summary>Adds a network client endpoint (rigctld or raw TCP) to the selected
+    /// radio. Port 0 lets the service auto-pick. Reloads so the new port shows live.</summary>
+    public async Task AddPortAsync(string endpointType, int port, string label)
     {
         if (_connection is null || SelectedRadio is null)
         {
@@ -165,23 +163,20 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            ServiceStatus = "creating virtual port…";
             var reply = await _connection.Client.AddClientPortAsync(
-                new AddClientPortRequest { Radio = SelectedRadio.Name },
-                deadline: DateTime.UtcNow.AddSeconds(60));
+                new AddClientPortRequest
+                {
+                    Radio = SelectedRadio.Name,
+                    EndpointType = endpointType,
+                    Port = port,
+                    Label = label,
+                },
+                deadline: DateTime.UtcNow.AddSeconds(30));
 
             ServiceStatus = reply.Message;
             if (reply.Ok)
             {
-                SelectedRadio.Ports.Add(new ClientPortViewModel
-                {
-                    PortDisplay = reply.PortDisplay,
-                    Label = reply.PortDisplay,
-                    Ptt = "CAT only",
-                    Status = "active",
-                    IsActive = true,
-                });
-                SelectedRadio.OnPortsChanged();
+                await ReloadRadiosAsync(SelectedRadio.Name);
             }
         }
         catch (Exception ex)
@@ -336,10 +331,6 @@ public partial class MainViewModel : ViewModelBase
             SelectedRadio = Radios.FirstOrDefault();
             IsLive = true;
             ServiceStatus = "service connected";
-
-            var driver = await _connection.Client.GetDriverStateAsync(
-                new GetDriverStateRequest(), deadline: DateTime.UtcNow.AddSeconds(3));
-            DriverStatus = driver.Installed ? "virtual COM driver ready" : "virtual COM driver not installed";
 
             _streamCts = new CancellationTokenSource();
             _ = PumpActivityAsync(_streamCts.Token);
