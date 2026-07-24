@@ -20,13 +20,13 @@ public class SignalFlowControl : Control
     public static readonly StyledProperty<IEnumerable<string>?> PortsProperty =
         AvaloniaProperty.Register<SignalFlowControl, IEnumerable<string>?>(nameof(Ports));
 
-    /// <summary>Bumped by the view model on each real activity event; a rising value
-    /// spawns one pulse, so the animation tracks actual traffic rather than a timer.</summary>
-    public static readonly StyledProperty<long> ActivityTickProperty =
-        AvaloniaProperty.Register<SignalFlowControl, long>(nameof(ActivityTick));
+    /// <summary>Bumped by the view model per real event; a rising value spawns one
+    /// pulse in that direction, so the animation tracks actual traffic, not a timer.</summary>
+    public static readonly StyledProperty<long> ToRadioTickProperty =
+        AvaloniaProperty.Register<SignalFlowControl, long>(nameof(ToRadioTick));
 
-    public static readonly StyledProperty<bool> LastTowardRadioProperty =
-        AvaloniaProperty.Register<SignalFlowControl, bool>(nameof(LastTowardRadio));
+    public static readonly StyledProperty<long> FromRadioTickProperty =
+        AvaloniaProperty.Register<SignalFlowControl, long>(nameof(FromRadioTick));
 
     private static readonly IBrush CommandBrush = new SolidColorBrush(Color.Parse("#EF9F27"));
     private static readonly IBrush ResponseBrush = new SolidColorBrush(Color.Parse("#1D9E75"));
@@ -53,39 +53,40 @@ public class SignalFlowControl : Control
         set => SetValue(PortsProperty, value);
     }
 
-    public long ActivityTick
+    public long ToRadioTick
     {
-        get => GetValue(ActivityTickProperty);
-        set => SetValue(ActivityTickProperty, value);
+        get => GetValue(ToRadioTickProperty);
+        set => SetValue(ToRadioTickProperty, value);
     }
 
-    public bool LastTowardRadio
+    public long FromRadioTick
     {
-        get => GetValue(LastTowardRadioProperty);
-        set => SetValue(LastTowardRadioProperty, value);
+        get => GetValue(FromRadioTickProperty);
+        set => SetValue(FromRadioTickProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ActivityTickProperty)
+        // Ignore the initial 0-binding when the control first attaches to a radio.
+        if (change.Property == ToRadioTickProperty && change.GetOldValue<long>() != 0)
         {
-            SpawnPulse(LastTowardRadio);
+            SpawnPulse(towardRadio: true);
+        }
+        else if (change.Property == FromRadioTickProperty && change.GetOldValue<long>() != 0)
+        {
+            SpawnPulse(towardRadio: false);
         }
     }
 
+    // Both directions ride the radio↔hub link (link 0): amber toward the radio
+    // for commands, teal back toward the hub for responses.
     private void SpawnPulse(bool towardRadio)
     {
-        if (_pulses.Count >= 12)
+        if (_pulses.Count < 12)
         {
-            return;
+            _pulses.Add(new Pulse { Link = 0, TowardRadio = towardRadio });
         }
-
-        // Radio-bound traffic pulses the radio↔hub link; client-bound traffic
-        // pulses one of the client links so both halves of the mux show life.
-        var portCount = Ports?.Count() ?? 0;
-        var link = towardRadio || portCount == 0 ? 0 : 1 + _random.Next(portCount);
-        _pulses.Add(new Pulse { Link = link, TowardRadio = towardRadio });
     }
 
     private sealed class Pulse

@@ -51,6 +51,11 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string CaptureStatus { get; set; } = string.Empty;
 
+    [ObservableProperty]
+    public partial string? LastCapturePath { get; set; }
+
+    private string? _capturePath;
+
     [RelayCommand]
     private void ToggleCapture()
     {
@@ -74,6 +79,8 @@ public partial class MainViewModel : ViewModelBase
                 _captureWriter = writer;
             }
 
+            _capturePath = path;
+            LastCapturePath = null; // hide the View button until this one is stopped
             IsCapturing = true;
             CaptureLabel = "Stop capture";
             CaptureStatus = $"capturing → {path}";
@@ -84,8 +91,30 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    private void ViewCapture()
+    {
+        if (LastCapturePath is null || !File.Exists(LastCapturePath))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(LastCapturePath)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            CaptureStatus = $"couldn't open log: {ex.Message}";
+        }
+    }
+
     private void StopCapture(string message)
     {
+        var wasCapturing = _captureWriter is not null;
         lock (_captureLock)
         {
             _captureWriter?.WriteLine($"# stopped {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -95,6 +124,11 @@ public partial class MainViewModel : ViewModelBase
 
         IsCapturing = false;
         CaptureLabel = "Start capture";
+        if (wasCapturing && _capturePath is not null)
+        {
+            LastCapturePath = _capturePath;
+        }
+
         if (message.Length > 0)
         {
             CaptureStatus = message;
@@ -310,7 +344,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         var fromRadio = evt.Kind is "ResponseReceived" or "Unsolicited";
-        radio.RegisterActivity(towardRadio: !fromRadio);
+        radio.RegisterActivity(fromRadio);
         var direction = fromRadio ? "radio →" : $"{evt.ClientId} →";
         radio.Traffic.Add(new TrafficEntry(evt.Time, $"{direction} {evt.Frame}", evt.Note));
         while (radio.Traffic.Count > 9)

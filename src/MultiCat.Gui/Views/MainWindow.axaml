@@ -94,8 +94,8 @@
           <controls:SignalFlowControl Height="170"
                                       RadioName="{Binding Name}"
                                       Ports="{Binding FlowPortLabels}"
-                                      ActivityTick="{Binding ActivityTick}"
-                                      LastTowardRadio="{Binding LastActivityTowardRadio}" />
+                                      ToRadioTick="{Binding ToRadioTick}"
+                                      FromRadioTick="{Binding FromRadioTick}" />
         </Border>
 
         <DockPanel>
@@ -131,9 +131,15 @@
         </Border>
 
         <DockPanel>
-          <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5"
-                  Content="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureLabel}"
-                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleCaptureCommand}" />
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+            <Button FontSize="12" Padding="10,5"
+                    Content="View capture"
+                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ViewCaptureCommand}"
+                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).LastCapturePath, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <Button FontSize="12" Padding="10,5"
+                    Content="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureLabel}"
+                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleCaptureCommand}" />
+          </StackPanel>
           <TextBlock Text="Traffic monitor" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
         </DockPanel>
         <TextBlock Text="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureStatus}"
