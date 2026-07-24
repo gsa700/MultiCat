@@ -2,7 +2,13 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using MultiCat.Service;
 using MultiCat.Service.Sessions;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    // Anchor config + content to the exe's own folder so appsettings.json is found
+    // no matter the working directory — launched as a shortcut, autostart, or service.
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
 // The control API lives on a named pipe only — nothing listens on TCP.
 builder.WebHost.ConfigureKestrel(kestrel =>
