@@ -36,7 +36,10 @@ Early development — pre-alpha. Working today:
 - Serial transport for real radios (opens only the configured port, never probes)
 - Client endpoints, all driverless: a hamlib **rigctld-protocol listener** (WSJT-X,
   fldigi, JTDX, GridTracker, and anything hamlib-aware connects natively) and raw
-  CAT over TCP, both on localhost
+  CAT over TCP, both on localhost. **Validated with real WSJT-X**: connected as
+  "Hamlib NET rigctl" at `localhost:4532`, it polled at 1 Hz (mostly served from
+  the poll cache while three other clients polled concurrently), and a band change
+  QSYed the radio with every other client following
 - Virtual COM port management for com0com, where its driver still loads (see below)
 - Service host: radio sessions from `appsettings.json`, gRPC control API over a
   named pipe, built-in simulated K3 for driverless development
