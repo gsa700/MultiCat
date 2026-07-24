@@ -24,9 +24,12 @@ public partial class RadioEditorViewModel : ViewModelBase
         {
             Name = string.Empty;
             IsSimulator = false;
+            SelectedConnectionIndex = 0;
             SelectedProtocolIndex = 0;
             ComPort = ComPorts.FirstOrDefault() ?? string.Empty;
             BaudRate = "38400";
+            Host = string.Empty;
+            TcpPort = "9200";
             ExposeRigctld = true;
             RigctldPort = "4532";
             ExposeRawTcp = false;
@@ -37,9 +40,12 @@ public partial class RadioEditorViewModel : ViewModelBase
         {
             Name = existing.Name;
             IsSimulator = existing.Simulator;
+            SelectedConnectionIndex = existing.Connection.Equals("Tcp", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
             SelectedProtocolIndex = existing.Protocol.Equals("IcomCiv", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
             ComPort = existing.ComPort;
             BaudRate = existing.BaudRate > 0 ? existing.BaudRate.ToString() : "38400";
+            Host = existing.Host;
+            TcpPort = existing.TcpPort > 0 ? existing.TcpPort.ToString() : "9200";
 
             var rigctld = existing.ClientPorts.FirstOrDefault(p => p.RigctldPort > 0);
             ExposeRigctld = rigctld is not null;
@@ -64,6 +70,8 @@ public partial class RadioEditorViewModel : ViewModelBase
 
     public string[] Protocols { get; } = ["Kenwood / Elecraft / Yaesu (ASCII)", "Icom CI-V"];
 
+    public string[] ConnectionKinds { get; } = ["Serial (COM port)", "Network (TCP/IP)"];
+
     public string[] BaudRates { get; } = ["1200", "4800", "9600", "19200", "38400", "57600", "115200"];
 
     [ObservableProperty]
@@ -73,7 +81,35 @@ public partial class RadioEditorViewModel : ViewModelBase
     public partial bool IsSimulator { get; set; }
 
     [ObservableProperty]
+    public partial int SelectedConnectionIndex { get; set; }
+
+    [ObservableProperty]
+    public partial string Host { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string TcpPort { get; set; } = "9200";
+
+    [ObservableProperty]
     public partial int SelectedProtocolIndex { get; set; }
+
+    // Visibility helpers for the editor: simulator hides all connection details;
+    // otherwise the serial or network fields show depending on the connection kind.
+    public bool ConnectionVisible => !IsSimulator;
+
+    public bool ShowSerial => !IsSimulator && SelectedConnectionIndex == 0;
+
+    public bool ShowNetwork => !IsSimulator && SelectedConnectionIndex == 1;
+
+    partial void OnIsSimulatorChanged(bool value) => RaiseVisibility();
+
+    partial void OnSelectedConnectionIndexChanged(int value) => RaiseVisibility();
+
+    private void RaiseVisibility()
+    {
+        OnPropertyChanged(nameof(ConnectionVisible));
+        OnPropertyChanged(nameof(ShowSerial));
+        OnPropertyChanged(nameof(ShowNetwork));
+    }
 
     [ObservableProperty]
     public partial int SelectedRigModelIndex { get; set; }
@@ -135,9 +171,23 @@ public partial class RadioEditorViewModel : ViewModelBase
             return null;
         }
 
-        if (!IsSimulator && string.IsNullOrWhiteSpace(ComPort))
+        var isNetwork = !IsSimulator && SelectedConnectionIndex == 1;
+
+        if (isNetwork && string.IsNullOrWhiteSpace(Host))
         {
-            ErrorText = "Choose the radio's COM port, or tick Simulator.";
+            ErrorText = "Enter the radio's hostname or IP address (e.g. 192.168.1.40 or K4-SN1234.local).";
+            return null;
+        }
+
+        if (isNetwork && !IsValidPort(TcpPort))
+        {
+            ErrorText = "The radio's TCP port must be a number between 1 and 65535 (Elecraft K4 uses 9200).";
+            return null;
+        }
+
+        if (!IsSimulator && !isNetwork && string.IsNullOrWhiteSpace(ComPort))
+        {
+            ErrorText = "Choose the radio's COM port, or switch to Network / Simulator.";
             return null;
         }
 
@@ -158,8 +208,11 @@ public partial class RadioEditorViewModel : ViewModelBase
             Name = Name.Trim(),
             Protocol = SelectedProtocolIndex == 1 ? "IcomCiv" : "Kenwood",
             Simulator = IsSimulator,
-            ComPort = IsSimulator ? string.Empty : ComPort.Trim(),
+            Connection = isNetwork ? "Tcp" : "Serial",
+            ComPort = isNetwork || IsSimulator ? string.Empty : ComPort.Trim(),
             BaudRate = int.TryParse(BaudRate, out var baud) ? baud : 38400,
+            Host = isNetwork ? Host.Trim() : string.Empty,
+            TcpPort = isNetwork ? int.Parse(TcpPort) : 0,
         };
 
         if (ExposeRigctld)

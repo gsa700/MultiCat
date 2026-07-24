@@ -139,8 +139,11 @@ public sealed class ControlService(
             Name = options.Name,
             Protocol = options.Protocol,
             Simulator = options.Simulator,
+            Connection = options.Connection,
             ComPort = options.ComPort ?? string.Empty,
             BaudRate = options.BaudRate,
+            Host = options.Host ?? string.Empty,
+            TcpPort = options.TcpPort ?? 0,
         };
 
         foreach (var port in options.ClientPorts)
@@ -164,8 +167,11 @@ public sealed class ControlService(
         Name = config.Name,
         Protocol = string.IsNullOrEmpty(config.Protocol) ? "Kenwood" : config.Protocol,
         Simulator = config.Simulator,
+        Connection = string.IsNullOrEmpty(config.Connection) ? "Serial" : config.Connection,
         ComPort = string.IsNullOrEmpty(config.ComPort) ? null : config.ComPort,
         BaudRate = config.BaudRate == 0 ? 38400 : config.BaudRate,
+        Host = string.IsNullOrEmpty(config.Host) ? null : config.Host,
+        TcpPort = config.TcpPort == 0 ? null : config.TcpPort,
         ClientPorts = [.. config.ClientPorts.Select(p => new ClientPortOptions
         {
             PortDisplay = p.PortDisplay,

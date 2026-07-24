@@ -73,9 +73,14 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
             return (false, "Radio name is required");
         }
 
-        if (!options.Simulator && string.IsNullOrWhiteSpace(options.ComPort))
+        if (!options.Simulator && options.IsNetwork && string.IsNullOrWhiteSpace(options.Host))
         {
-            return (false, "A COM port is required for a non-simulated radio");
+            return (false, "A host or IP address is required for a network radio");
+        }
+
+        if (!options.Simulator && !options.IsNetwork && string.IsNullOrWhiteSpace(options.ComPort))
+        {
+            return (false, "A COM port is required for a serial radio");
         }
 
         await _mutation.WaitAsync();

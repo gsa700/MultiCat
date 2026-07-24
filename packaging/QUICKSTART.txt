@@ -19,19 +19,19 @@ WHAT'S IN THIS FOLDER
    confirms everything runs on your machine.
 
 
-2. CONNECT A REAL RADIO
-   a. Close MultiCAT (close the window; the service stops with it — or end
-      MultiCat.Service in Task Manager).
-   b. Open MultiCat.Service\appsettings.json in Notepad.
-   c. Replace the "Radios" section with a real-radio entry — copy from
-      appsettings.example-real-radio.json in this folder. Set:
-        "Simulator": false
-        "ComPort":   your radio's CAT COM port (e.g. "COM7")
-        "BaudRate":  your radio's CAT baud rate (e.g. 38400)
-        "Protocol":  "Kenwood" for Kenwood/Elecraft, "IcomCiv" for Icom
-   d. Save and run "Start MultiCAT.cmd" again.
+2. CONNECT A REAL RADIO (from the app — no file editing)
+   In the MultiCAT window: use "Add radio" (or Edit an existing one).
+     - Serial radio: pick Connection = Serial, choose the COM port and baud,
+       or pick your rig from the hamlib list to prefill those.
+     - Network radio (e.g. Elecraft K4/K4D): pick Connection = Network, enter
+       the radio's IP address (or K4-SNxxxx.local) and TCP port (K4 = 9200).
+     - Simulator: tick the Simulator box to test with no hardware.
+   Tick which network endpoints share it (rigctld for WSJT-X/fldigi, raw TCP),
+   then Save. The radio connects and its live frequency appears in the status
+   line. Everything is saved automatically; no restart needed.
 
-   MultiCAT opens the radio and the status line shows its live frequency.
+   (You can still hand-edit MultiCat.Service\appsettings.json if you prefer —
+   see appsettings.example-real-radio.json for serial and network examples.)
 
 
 3. POINT YOUR SOFTWARE AT MULTICAT (no COM driver needed)

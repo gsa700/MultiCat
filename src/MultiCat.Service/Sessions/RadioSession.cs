@@ -15,9 +15,20 @@ public sealed record RadioSessionOptions
     /// <summary>When true, runs against the built-in simulated K3 instead of hardware.</summary>
     public bool Simulator { get; init; }
 
+    /// <summary>"Serial" (default) or "Tcp" for networked rigs like the Elecraft K4.</summary>
+    public string Connection { get; init; } = "Serial";
+
     public string? ComPort { get; init; }
 
     public int BaudRate { get; init; } = 38400;
+
+    /// <summary>Hostname or IP for a network radio ("192.168.1.40" or "K4-SN1234.local").</summary>
+    public string? Host { get; init; }
+
+    /// <summary>TCP CAT port for a network radio (Elecraft K4 uses 9200).</summary>
+    public int? TcpPort { get; init; }
+
+    public bool IsNetwork => Connection.Equals("Tcp", StringComparison.OrdinalIgnoreCase);
 
     public List<ClientPortOptions> ClientPorts { get; init; } = [];
 }
@@ -58,11 +69,24 @@ public sealed class RadioSession : IAsyncDisposable
     public RadioSession(RadioSessionOptions options)
     {
         Options = options;
-        _transport = options.Simulator
-            ? new SimulatedKenwoodTransport()
-            : new SerialPortTransport(
+        _transport = options switch
+        {
+            { Simulator: true } => new SimulatedKenwoodTransport(),
+            { IsNetwork: true } => new NetworkCatTransport(
+                options.Host ?? throw new InvalidOperationException($"Radio '{options.Name}' has no Host configured"),
+                options.TcpPort ?? 9200),
+            _ => new SerialPortTransport(
                 options.ComPort ?? throw new InvalidOperationException($"Radio '{options.Name}' has no ComPort configured"),
-                options.BaudRate);
+                options.BaudRate),
+        };
+
+        // On a real radio, arm auto-information so the rig pushes FA/FB/MD the instant
+        // they change (proven against a real K4D in virtual-flex). For the network
+        // transport this re-arms on every reconnect; for serial we arm once at Start.
+        if (_transport is NetworkCatTransport network)
+        {
+            network.Connected += () => _ = ArmPushModeAsync();
+        }
 
         // CI-V support exists in Core; sessions are Kenwood-family until the
         // config UI can express per-protocol defaults.
@@ -107,11 +131,20 @@ public sealed class RadioSession : IAsyncDisposable
 
     public TransactionArbiter Arbiter { get; }
 
-    public bool IsConnected { get; private set; }
+    private bool _started;
 
-    public string ConnectionSummary => Options.Simulator
-        ? "simulator · connected"
-        : $"{Options.ComPort} · {(IsConnected ? "connected" : "idle")}";
+    public bool IsConnected => _transport switch
+    {
+        NetworkCatTransport network => network.IsConnected,
+        _ => _started,
+    };
+
+    public string ConnectionSummary => Options switch
+    {
+        { Simulator: true } => "simulator · connected",
+        { IsNetwork: true } => $"{Options.Host}:{Options.TcpPort ?? 9200} · {(IsConnected ? "connected" : "connecting…")}",
+        _ => $"{Options.ComPort} · {(IsConnected ? "connected" : "idle")}",
+    };
 
     public string StatusText
     {
@@ -132,12 +165,18 @@ public sealed class RadioSession : IAsyncDisposable
 
     public void Start()
     {
-        if (_transport is SerialPortTransport serial)
+        switch (_transport)
         {
-            serial.Open();
+            case SerialPortTransport serial:
+                serial.Open();
+                _ = ArmPushModeAsync();
+                break;
+            case NetworkCatTransport network:
+                network.Open(); // connects (and re-arms push mode) in the background
+                break;
         }
 
-        IsConnected = true;
+        _started = true;
         _loops.Add(PollLoop("status", TimeSpan.FromMilliseconds(1000)));
         if (Options.Simulator)
         {
@@ -148,6 +187,26 @@ public sealed class RadioSession : IAsyncDisposable
         foreach (var port in Options.ClientPorts)
         {
             StartClientPort(port);
+        }
+    }
+
+    /// <summary>Arms Kenwood auto-information (AI2) so the radio pushes state changes,
+    /// then does one full read. Sets are no-reply; the reads feed the state tracker.</summary>
+    private async Task ArmPushModeAsync()
+    {
+        if (Options.Simulator)
+        {
+            return; // the simulator has no AI mode; its poll loop drives state
+        }
+
+        try
+        {
+            await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("AI2;"), _cts.Token);
+            await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("FA;"), _cts.Token);
+            await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("MD;"), _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
         }
     }
 

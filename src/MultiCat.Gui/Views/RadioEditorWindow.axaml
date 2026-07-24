@@ -27,10 +27,23 @@
 
     <CheckBox IsChecked="{Binding IsSimulator}" Content="Simulated radio (no hardware — for testing)" />
 
-    <Grid ColumnDefinitions="*,10,*" IsVisible="{Binding !IsSimulator}">
+    <StackPanel Spacing="3" IsVisible="{Binding ConnectionVisible}">
+      <TextBlock Text="Connection" FontSize="11" Foreground="#8E8E8E" />
+      <ComboBox ItemsSource="{Binding ConnectionKinds}" SelectedIndex="{Binding SelectedConnectionIndex}"
+                HorizontalAlignment="Stretch" />
+    </StackPanel>
+
+    <StackPanel Spacing="3" IsVisible="{Binding ConnectionVisible}">
+      <TextBlock Text="Protocol" FontSize="11" Foreground="#8E8E8E" />
+      <ComboBox ItemsSource="{Binding Protocols}" SelectedIndex="{Binding SelectedProtocolIndex}"
+                HorizontalAlignment="Stretch" />
+    </StackPanel>
+
+    <!-- Serial fields -->
+    <Grid ColumnDefinitions="*,10,140" IsVisible="{Binding ShowSerial}">
       <StackPanel Grid.Column="0" Spacing="3">
-        <TextBlock Text="Protocol" FontSize="11" Foreground="#8E8E8E" />
-        <ComboBox ItemsSource="{Binding Protocols}" SelectedIndex="{Binding SelectedProtocolIndex}"
+        <TextBlock Text="COM port" FontSize="11" Foreground="#8E8E8E" />
+        <ComboBox ItemsSource="{Binding ComPorts}" SelectedItem="{Binding ComPort}"
                   HorizontalAlignment="Stretch" />
       </StackPanel>
       <StackPanel Grid.Column="2" Spacing="3">
@@ -40,11 +53,17 @@
       </StackPanel>
     </Grid>
 
-    <StackPanel Spacing="3" IsVisible="{Binding !IsSimulator}">
-      <TextBlock Text="COM port" FontSize="11" Foreground="#8E8E8E" />
-      <ComboBox ItemsSource="{Binding ComPorts}" SelectedItem="{Binding ComPort}"
-                HorizontalAlignment="Stretch" />
-    </StackPanel>
+    <!-- Network fields -->
+    <Grid ColumnDefinitions="*,10,90" IsVisible="{Binding ShowNetwork}">
+      <StackPanel Grid.Column="0" Spacing="3">
+        <TextBlock Text="Host or IP address" FontSize="11" Foreground="#8E8E8E" />
+        <TextBox Text="{Binding Host}" Watermark="192.168.1.40 or K4-SN1234.local" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Spacing="3">
+        <TextBlock Text="TCP port" FontSize="11" Foreground="#8E8E8E" />
+        <TextBox Text="{Binding TcpPort}" />
+      </StackPanel>
+    </Grid>
 
     <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="12,10">
       <StackPanel Spacing="8">

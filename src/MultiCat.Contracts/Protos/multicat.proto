@@ -79,6 +79,9 @@ message RadioConfig {
   int32 baud_rate = 5;
   int32 hamlib_model_id = 6;    // 0 when not chosen from the database
   repeated RadioClientPort client_ports = 7;
+  string connection = 8;        // "Serial" (default) or "Tcp"
+  string host = 9;              // hostname/IP for a network radio
+  int32 tcp_port = 10;          // TCP CAT port (Elecraft K4 = 9200)
 }
 
 message RadioClientPort {

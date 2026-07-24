@@ -34,6 +34,9 @@ Early development — pre-alpha. Working today:
   short-TTL poll cache, client port endpoints, radio state tracker with
   frequency/mode events (unit tested)
 - Serial transport for real radios (opens only the configured port, never probes)
+- Network transport for TCP radios (Elecraft K4/K4D on port 9200): background
+  reconnect, and `AI2` push mode so the rig reports frequency/mode the instant
+  they change (validated against a fake K4 emulating the real protocol)
 - Client endpoints, all driverless: a hamlib **rigctld-protocol listener** (WSJT-X,
   fldigi, JTDX, GridTracker, and anything hamlib-aware connects natively) and raw
   CAT over TCP, both on localhost. **Validated with real WSJT-X**: connected as
