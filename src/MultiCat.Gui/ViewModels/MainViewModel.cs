@@ -13,6 +13,7 @@ public partial class MainViewModel : ViewModelBase
 {
     private ServiceConnection? _connection;
     private CancellationTokenSource? _streamCts;
+    private DispatcherTimer? _statusTimer;
     private readonly Lock _captureLock = new();
     private StreamWriter? _captureWriter;
 
@@ -263,6 +264,44 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    // Updates per-port status (client counts, driver readiness) in place without
+    // rebuilding the list, so it doesn't disturb selection, traffic, or the diagram.
+    private async Task RefreshStatusesAsync()
+    {
+        if (_connection is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var list = await _connection.Client.GetRadiosAsync(
+                new GetRadiosRequest(), deadline: DateTime.UtcNow.AddSeconds(2));
+            foreach (var info in list.Radios)
+            {
+                var radio = Radios.FirstOrDefault(r => r.Name == info.Name);
+                if (radio is null)
+                {
+                    continue;
+                }
+
+                foreach (var portInfo in info.Ports)
+                {
+                    var port = radio.Ports.FirstOrDefault(p => p.PortDisplay == portInfo.PortDisplay);
+                    if (port is not null)
+                    {
+                        port.Status = portInfo.Status;
+                        port.IsActive = portInfo.Active;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Transient; the next tick tries again.
+        }
+    }
+
     private async Task ReloadRadiosAsync(string? selectByName)
     {
         if (_connection is null)
@@ -304,6 +343,12 @@ public partial class MainViewModel : ViewModelBase
 
             _streamCts = new CancellationTokenSource();
             _ = PumpActivityAsync(_streamCts.Token);
+
+            // Port statuses (client counts, driver state) change without an activity
+            // event, so refresh them on a slow timer — the stream handles the rest.
+            _statusTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
+                (_, _) => _ = RefreshStatusesAsync());
+            _statusTimer.Start();
         }
         catch (Exception)
         {
@@ -474,6 +519,7 @@ public partial class MainViewModel : ViewModelBase
 
     public void Shutdown()
     {
+        _statusTimer?.Stop();
         StopCapture(string.Empty);
         _streamCts?.Cancel();
         _connection?.Dispose();

@@ -1,6 +1,8 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace MultiCat.Gui.ViewModels;
 
-public sealed class ClientPortViewModel
+public partial class ClientPortViewModel : ViewModelBase
 {
     public required string PortDisplay { get; init; }
 
@@ -8,9 +10,12 @@ public sealed class ClientPortViewModel
 
     public required string Ptt { get; init; }
 
-    public required string Status { get; init; }
+    // Status and active state change as clients connect/disconnect, so they refresh live.
+    [ObservableProperty]
+    public partial string Status { get; set; } = string.Empty;
 
-    public bool IsActive { get; init; }
+    [ObservableProperty]
+    public partial bool IsActive { get; set; }
 
     /// <summary>Short label used by the signal-flow diagram node.</summary>
     public string FlowLabel => Label.Length > 0 && Label != "spare" ? Label : PortDisplay;
