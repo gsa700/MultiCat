@@ -74,12 +74,26 @@ return 0;
 [DllImport("ole32.dll")]
 static extern int CoRegisterClassObject(in Guid rclsid, [MarshalAs(UnmanagedType.IUnknown)] object pUnk, uint dwClsContext, uint flags, out uint lpdwRegister);
 
+[DllImport("oleaut32.dll", CharSet = CharSet.Unicode)]
+static extern int LoadTypeLibEx(string szFile, uint regkind, out IntPtr pptlib);
+
+[DllImport("oleaut32.dll")]
+static extern int UnRegisterTypeLib(in Guid libID, ushort wVerMajor, ushort wVerMinor, int lcid, int syskind);
+
 static RegistryKey ClassesKey(string path) =>
     Registry.LocalMachine.CreateSubKey($@"Software\Classes\{path}");
 
 static void Register(string exePath)
 {
     var tlbPath = Path.Combine(Path.GetDirectoryName(exePath)!, "OmniRig.tlb");
+
+    // Properly register the type library (REGKIND_REGISTER = 0) so the oleaut32
+    // universal marshaller can build an IDispatch proxy for the dual interfaces —
+    // hand-written registry keys aren't enough for out-of-process IDispatch.
+    if (LoadTypeLibEx(tlbPath, 0, out var tlib) == 0 && tlib != IntPtr.Zero)
+    {
+        Marshal.Release(tlib);
+    }
 
     using (var progId = ClassesKey(OmniRigGuids.ProgId))
     {
@@ -126,6 +140,13 @@ static void Register(string exePath)
 
 static void Unregister()
 {
+    // SYS_WIN32 = 1, SYS_WIN64 = 3; try both so it clears whichever was registered.
+    foreach (var syskind in new[] { 1, 3 })
+    {
+        try { UnRegisterTypeLib(new Guid(OmniRigGuids.TypeLib), 1, 0, 0, syskind); }
+        catch (Exception) { }
+    }
+
     var paths = new List<string>
     {
         OmniRigGuids.ProgId,
