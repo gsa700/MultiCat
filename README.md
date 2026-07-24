@@ -55,9 +55,12 @@ Early development — pre-alpha. Working today:
   `OmniRig.OmniRigX` (one UAC prompt; machine-wide, because current Windows 11
   builds no longer honor per-user COM server activation), implements VE3NEA's
   published interfaces GUID-for-GUID, and forwards to MultiCAT's rigctld
-  endpoint — so N1MM+, Log4OM, CW Skimmer, and friends see "OmniRig" while
-  MultiCAT arbitrates. Verified with both late-bound (IDispatch) and
-  early-bound (vtable/typelib) clients, including COM launch-on-demand
+  endpoint — so Log4OM, CW Skimmer, SDR Console, WSJT-X, and other
+  OmniRig-aware apps see "OmniRig" while MultiCAT arbitrates. Verified with
+  both late-bound (IDispatch) and early-bound (vtable/typelib) clients,
+  including COM launch-on-demand. (Note: N1MM+ supports neither OmniRig nor
+  any network CAT — it is serial-COM-only, making it the prime motivation for
+  the first-party virtual COM driver.)
 
 Not yet built: CI-V session wiring (the framer exists; sessions are
 Kenwood-family for now), PTT arbitration, applying the selected rig's serial
