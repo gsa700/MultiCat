@@ -76,6 +76,98 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>True when connected to a live service (radio editing is possible).</summary>
+    public bool CanEdit => _connection is not null;
+
+    public async Task<string[]> GetComPortsAsync()
+    {
+        if (_connection is null)
+        {
+            return [];
+        }
+
+        var reply = await _connection.Client.ListComPortsAsync(new ListComPortsRequest());
+        return [.. reply.Ports];
+    }
+
+    public async Task<RadioConfig?> GetConfigAsync(string radioName)
+    {
+        if (_connection is null)
+        {
+            return null;
+        }
+
+        var configs = await _connection.Client.GetRadioConfigsAsync(new GetRadioConfigsRequest());
+        return configs.Radios.FirstOrDefault(r => r.Name == radioName);
+    }
+
+    public async Task<(bool Ok, string Message)> SaveRadioAsync(SaveRadioRequest request)
+    {
+        if (_connection is null)
+        {
+            return (false, "service offline");
+        }
+
+        try
+        {
+            var reply = await _connection.Client.SaveRadioAsync(request, deadline: DateTime.UtcNow.AddSeconds(30));
+            ServiceStatus = reply.Message;
+            if (reply.Ok)
+            {
+                await ReloadRadiosAsync(request.Radio.Name);
+            }
+
+            return (reply.Ok, reply.Message);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Ok, string Message)> DeleteRadioAsync(string radioName)
+    {
+        if (_connection is null)
+        {
+            return (false, "service offline");
+        }
+
+        try
+        {
+            var reply = await _connection.Client.DeleteRadioAsync(
+                new DeleteRadioRequest { Name = radioName }, deadline: DateTime.UtcNow.AddSeconds(30));
+            ServiceStatus = reply.Message;
+            if (reply.Ok)
+            {
+                await ReloadRadiosAsync(null);
+            }
+
+            return (reply.Ok, reply.Message);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private async Task ReloadRadiosAsync(string? selectByName)
+    {
+        if (_connection is null)
+        {
+            return;
+        }
+
+        var wanted = selectByName ?? SelectedRadio?.Name;
+        var radioList = await _connection.Client.GetRadiosAsync(new GetRadiosRequest());
+        Radios.Clear();
+        foreach (var radio in radioList.Radios)
+        {
+            Radios.Add(ToViewModel(radio));
+        }
+
+        SelectedRadio = Radios.FirstOrDefault(r => r.Name == wanted) ?? Radios.FirstOrDefault();
+    }
+
     private async Task ConnectAsync()
     {
         try

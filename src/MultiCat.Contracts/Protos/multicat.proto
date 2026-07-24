@@ -11,6 +11,10 @@ service MultiCatControl {
   rpc StreamActivity (StreamActivityRequest) returns (stream ActivityEvent);
   rpc GetDriverState (GetDriverStateRequest) returns (DriverState);
   rpc AddClientPort (AddClientPortRequest) returns (AddClientPortReply);
+  rpc GetRadioConfigs (GetRadioConfigsRequest) returns (RadioConfigList);
+  rpc SaveRadio (SaveRadioRequest) returns (SaveRadioReply);
+  rpc DeleteRadio (DeleteRadioRequest) returns (SaveRadioReply);
+  rpc ListComPorts (ListComPortsRequest) returns (ComPortList);
 }
 
 message GetRadiosRequest {}
@@ -55,6 +59,53 @@ message ClientPortInfo {
   string ptt = 3;
   string status = 4;
   bool active = 5;
+}
+
+message GetRadioConfigsRequest {}
+
+message ListComPortsRequest {}
+
+message ComPortList {
+  repeated string ports = 1;
+}
+
+// The editable configuration of one radio (distinct from RadioInfo, which is
+// live runtime status). Round-trips through the radio editor.
+message RadioConfig {
+  string name = 1;
+  string protocol = 2;          // "Kenwood" or "IcomCiv"
+  bool simulator = 3;
+  string com_port = 4;
+  int32 baud_rate = 5;
+  int32 hamlib_model_id = 6;    // 0 when not chosen from the database
+  repeated RadioClientPort client_ports = 7;
+}
+
+message RadioClientPort {
+  string port_display = 1;
+  string label = 2;
+  string ptt = 3;
+  string mux_port = 4;          // empty unless a virtual COM pair
+  int32 tcp_port = 5;           // 0 unless a raw-CAT TCP listener
+  int32 rigctld_port = 6;       // 0 unless a rigctld listener
+}
+
+message RadioConfigList {
+  repeated RadioConfig radios = 1;
+}
+
+message SaveRadioRequest {
+  string original_name = 1;     // empty = add new; otherwise the radio being edited
+  RadioConfig radio = 2;
+}
+
+message SaveRadioReply {
+  bool ok = 1;
+  string message = 2;
+}
+
+message DeleteRadioRequest {
+  string name = 1;
 }
 
 // One traffic-monitor line, plus optional radio-state change riding along.

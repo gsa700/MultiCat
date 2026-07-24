@@ -24,7 +24,8 @@
           <TextBlock Text="{Binding DriverStatus}" FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap" />
         </StackPanel>
         <Button DockPanel.Dock="Bottom" HorizontalAlignment="Stretch"
-                HorizontalContentAlignment="Center" Margin="0,8,0,0">+ Add radio</Button>
+                HorizontalContentAlignment="Center" Margin="0,8,0,0"
+                Click="OnAddRadio">+ Add radio</Button>
         <StackPanel DockPanel.Dock="Top" Spacing="4">
           <TextBlock Text="Radios" FontSize="11" Foreground="#8E8E8E" Margin="8,4,0,2" />
           <ListBox ItemsSource="{Binding Radios}" SelectedItem="{Binding SelectedRadio}"
@@ -47,10 +48,16 @@
                   DataContext="{Binding SelectedRadio}"
                   x:DataType="vm:RadioItemViewModel">
 
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <TextBlock Text="Radio connection" FontSize="13" FontWeight="Medium" VerticalAlignment="Bottom" />
-          <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#3B9E5F" VerticalAlignment="Bottom" />
-        </StackPanel>
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+            <Button Content="Edit" FontSize="12" Padding="12,4" Click="OnEditRadio" />
+            <Button Content="Delete" FontSize="12" Padding="12,4" Click="OnDeleteRadio" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Radio connection" FontSize="13" FontWeight="Medium" VerticalAlignment="Bottom" />
+            <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#3B9E5F" VerticalAlignment="Bottom" />
+          </StackPanel>
+        </DockPanel>
 
         <Grid ColumnDefinitions="*,8,*,8,*,8,*">
           <StackPanel Grid.Column="0" Spacing="3">

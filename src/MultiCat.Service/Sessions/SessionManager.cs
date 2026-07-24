@@ -7,41 +7,151 @@ namespace MultiCat.Service.Sessions;
 
 /// <summary>
 /// Owns every RadioSession and fans arbiter activity out to any number of
-/// subscribed activity streams (one per connected GUI).
+/// subscribed activity streams (one per connected GUI). Radios can be added,
+/// edited, and removed live; changes persist to appsettings.json via the store.
 /// </summary>
-public sealed class SessionManager(ILogger<SessionManager> logger, IConfiguration configuration) : IHostedService, IAsyncDisposable
+public sealed class SessionManager : IHostedService, IAsyncDisposable
 {
+    private readonly ILogger<SessionManager> _logger;
+    private readonly RadioConfigStore _store;
     private readonly List<RadioSession> _sessions = [];
     private readonly ConcurrentDictionary<Guid, Channel<ActivityEvent>> _subscribers = new();
+    private readonly SemaphoreSlim _mutation = new(1, 1);
+
+    public SessionManager(ILogger<SessionManager> logger, IHostEnvironment environment)
+    {
+        _logger = logger;
+        _store = new RadioConfigStore(Path.Combine(environment.ContentRootPath, "appsettings.json"));
+    }
 
     public IReadOnlyList<RadioSession> Sessions => _sessions;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        var configs = configuration.GetSection("Radios").Get<List<RadioSessionOptions>>() ?? [];
+        var configs = _store.Load();
         if (configs.Count == 0)
         {
-            logger.LogWarning("No radios configured; starting with the built-in simulator");
+            _logger.LogWarning("No radios configured; starting with the built-in simulator");
             configs.Add(new RadioSessionOptions { Name = "Elecraft K3 (simulated)", Simulator = true });
         }
 
         foreach (var config in configs)
         {
-            try
-            {
-                var session = new RadioSession(config);
-                session.ActivityObserved += OnActivity;
-                session.Start();
-                _sessions.Add(session);
-                logger.LogInformation("Radio session started: {Name} ({Connection})", config.Name, session.ConnectionSummary);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to start radio session {Name}", config.Name);
-            }
+            TryStartSession(config);
         }
 
         return Task.CompletedTask;
+    }
+
+    private bool TryStartSession(RadioSessionOptions config)
+    {
+        try
+        {
+            var session = new RadioSession(config);
+            session.ActivityObserved += OnActivity;
+            session.Start();
+            _sessions.Add(session);
+            _logger.LogInformation("Radio session started: {Name} ({Connection})", config.Name, session.ConnectionSummary);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start radio session {Name}", config.Name);
+            return false;
+        }
+    }
+
+    public IReadOnlyList<RadioSessionOptions> GetConfigs() =>
+        [.. _sessions.Select(s => s.Options)];
+
+    /// <summary>Adds a radio (originalName empty) or replaces an existing one. The old
+    /// session is stopped and a fresh one started so changes take effect immediately.</summary>
+    public async Task<(bool Ok, string Message)> SaveRadioAsync(string? originalName, RadioSessionOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Name))
+        {
+            return (false, "Radio name is required");
+        }
+
+        if (!options.Simulator && string.IsNullOrWhiteSpace(options.ComPort))
+        {
+            return (false, "A COM port is required for a non-simulated radio");
+        }
+
+        await _mutation.WaitAsync();
+        try
+        {
+            var editing = !string.IsNullOrEmpty(originalName);
+            if (!editing && _sessions.Any(s => s.Options.Name == options.Name))
+            {
+                return (false, $"A radio named '{options.Name}' already exists");
+            }
+
+            var target = editing ? originalName : options.Name;
+            var existing = _sessions.FirstOrDefault(s => s.Options.Name == target);
+            if (editing && existing is null)
+            {
+                return (false, $"Radio '{originalName}' not found");
+            }
+
+            if (existing is not null)
+            {
+                existing.ActivityObserved -= OnActivity;
+                await existing.DisposeAsync();
+                _sessions.Remove(existing);
+            }
+
+            if (!TryStartSession(options))
+            {
+                // Persist the intended config anyway so the user can fix it in the file,
+                // but tell them the live start failed (bad port, rig offline, …).
+                Persist();
+                return (false, $"Saved, but could not open '{options.Name}' — check the COM port and that the radio is on");
+            }
+
+            Persist();
+            return (true, editing ? $"Updated '{options.Name}'" : $"Added '{options.Name}'");
+        }
+        finally
+        {
+            _mutation.Release();
+        }
+    }
+
+    public async Task<(bool Ok, string Message)> DeleteRadioAsync(string name)
+    {
+        await _mutation.WaitAsync();
+        try
+        {
+            var session = _sessions.FirstOrDefault(s => s.Options.Name == name);
+            if (session is null)
+            {
+                return (false, $"Radio '{name}' not found");
+            }
+
+            session.ActivityObserved -= OnActivity;
+            await session.DisposeAsync();
+            _sessions.Remove(session);
+            Persist();
+            return (true, $"Removed '{name}'");
+        }
+        finally
+        {
+            _mutation.Release();
+        }
+    }
+
+    /// <summary>Writes the current radio set back to appsettings.json.</summary>
+    public void Persist()
+    {
+        try
+        {
+            _store.Save(_sessions.Select(s => s.Options));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist radio configuration to {Path}", _store.FilePath);
+        }
     }
 
     private void OnActivity(RadioSession session, ArbiterActivity activity, long frequencyHz, string mode)
@@ -116,54 +226,13 @@ public sealed class SessionManager(ILogger<SessionManager> logger, IConfiguratio
         }
     }
 
-    /// <summary>Persists a newly added client port into appsettings.json so it
-    /// survives restarts. The file is the single source of radio configuration.</summary>
-    public void PersistClientPort(string radioName, ClientPortOptions port, string contentRootPath)
-    {
-        var path = Path.Combine(contentRootPath, "appsettings.json");
-        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        var radios = root["Radios"]?.AsArray();
-        var radio = radios?.FirstOrDefault(r => r?["Name"]?.GetValue<string>() == radioName)?.AsObject();
-        if (radio is null)
-        {
-            logger.LogWarning("Could not persist port {Port}: radio {Radio} not found in {Path}", port.PortDisplay, radioName, path);
-            return;
-        }
-
-        if (radio["ClientPorts"] is not System.Text.Json.Nodes.JsonArray ports)
-        {
-            ports = [];
-            radio["ClientPorts"] = ports;
-        }
-
-        var entry = new System.Text.Json.Nodes.JsonObject
-        {
-            ["PortDisplay"] = port.PortDisplay,
-            ["Label"] = port.Label,
-            ["Ptt"] = port.Ptt,
-        };
-        if (port.MuxPort is { } mux)
-        {
-            entry["MuxPort"] = mux;
-        }
-
-        if (port.TcpPort is { } tcp)
-        {
-            entry["TcpPort"] = tcp;
-        }
-
-        ports.Add(entry);
-        File.WriteAllText(path, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        logger.LogInformation("Persisted client port {Port} for {Radio}", port.PortDisplay, radioName);
-    }
-
     public (Guid Id, ChannelReader<ActivityEvent> Reader) Subscribe()
     {
         var id = Guid.NewGuid();
         var channel = Channel.CreateBounded<ActivityEvent>(
             new BoundedChannelOptions(512) { FullMode = BoundedChannelFullMode.DropOldest });
         _subscribers[id] = channel;
-        logger.LogInformation("Activity stream opened ({Count} subscriber(s))", _subscribers.Count);
+        _logger.LogInformation("Activity stream opened ({Count} subscriber(s))", _subscribers.Count);
         return (id, channel.Reader);
     }
 
@@ -172,7 +241,7 @@ public sealed class SessionManager(ILogger<SessionManager> logger, IConfiguratio
         if (_subscribers.TryRemove(id, out var channel))
         {
             channel.Writer.TryComplete();
-            logger.LogInformation("Activity stream closed ({Count} subscriber(s))", _subscribers.Count);
+            _logger.LogInformation("Activity stream closed ({Count} subscriber(s))", _subscribers.Count);
         }
     }
 

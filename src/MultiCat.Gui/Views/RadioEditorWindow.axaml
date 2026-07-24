@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MultiCat.Gui.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="560"
+        x:Class="MultiCat.Gui.Views.RadioEditorWindow"
+        x:DataType="vm:RadioEditorViewModel"
+        Width="440" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+  <StackPanel Margin="18" Spacing="12">
+
+    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="Medium" />
+
+    <StackPanel Spacing="3">
+      <TextBlock Text="Name" FontSize="11" Foreground="#8E8E8E" />
+      <TextBox Text="{Binding Name}" Watermark="e.g. Shack K3" />
+    </StackPanel>
+
+    <StackPanel Spacing="3">
+      <TextBlock Text="Rig model (optional — prefills the fields below)" FontSize="11" Foreground="#8E8E8E" />
+      <ComboBox ItemsSource="{Binding RigModels}" SelectedIndex="{Binding SelectedRigModelIndex}"
+                HorizontalAlignment="Stretch" MaxDropDownHeight="320" />
+    </StackPanel>
+
+    <CheckBox IsChecked="{Binding IsSimulator}" Content="Simulated radio (no hardware — for testing)" />
+
+    <Grid ColumnDefinitions="*,10,*" IsVisible="{Binding !IsSimulator}">
+      <StackPanel Grid.Column="0" Spacing="3">
+        <TextBlock Text="Protocol" FontSize="11" Foreground="#8E8E8E" />
+        <ComboBox ItemsSource="{Binding Protocols}" SelectedIndex="{Binding SelectedProtocolIndex}"
+                  HorizontalAlignment="Stretch" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Spacing="3">
+        <TextBlock Text="Baud rate" FontSize="11" Foreground="#8E8E8E" />
+        <ComboBox ItemsSource="{Binding BaudRates}" SelectedItem="{Binding BaudRate}"
+                  HorizontalAlignment="Stretch" />
+      </StackPanel>
+    </Grid>
+
+    <StackPanel Spacing="3" IsVisible="{Binding !IsSimulator}">
+      <TextBlock Text="COM port" FontSize="11" Foreground="#8E8E8E" />
+      <ComboBox ItemsSource="{Binding ComPorts}" SelectedItem="{Binding ComPort}"
+                HorizontalAlignment="Stretch" />
+    </StackPanel>
+
+    <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="12,10">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Share this radio with apps (no COM driver needed)" FontSize="12" FontWeight="Medium" />
+        <Grid ColumnDefinitions="*,90">
+          <CheckBox Grid.Column="0" IsChecked="{Binding ExposeRigctld}"
+                    Content="rigctld — WSJT-X, fldigi, hamlib apps" VerticalAlignment="Center" />
+          <TextBox Grid.Column="1" Text="{Binding RigctldPort}" IsEnabled="{Binding ExposeRigctld}" />
+        </Grid>
+        <Grid ColumnDefinitions="*,90">
+          <CheckBox Grid.Column="0" IsChecked="{Binding ExposeRawTcp}"
+                    Content="Raw CAT over TCP" VerticalAlignment="Center" />
+          <TextBox Grid.Column="1" Text="{Binding RawTcpPort}" IsEnabled="{Binding ExposeRawTcp}" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding ErrorText}" Foreground="#D0432F" FontSize="12"
+               TextWrapping="Wrap" IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancel" Click="OnCancel" MinWidth="80" />
+      <Button Content="Save" Click="OnSave" MinWidth="80"
+              Background="#2D7D46" Foreground="White" />
+    </StackPanel>
+
+  </StackPanel>
+</Window>

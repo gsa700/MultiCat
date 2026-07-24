@@ -8,8 +8,7 @@ namespace MultiCat.Service;
 /// <summary>gRPC surface consumed by the GUI over the named pipe.</summary>
 public sealed class ControlService(
     SessionManager sessions,
-    Com0ComManager driver,
-    IHostEnvironment environment) : MultiCatControl.MultiCatControlBase
+    Com0ComManager driver) : MultiCatControl.MultiCatControlBase
 {
     public override Task<DriverState> GetDriverState(GetDriverStateRequest request, ServerCallContext context)
     {
@@ -58,7 +57,7 @@ public sealed class ControlService(
             MuxPort = muxPort,
         };
         session.AddClientPort(port);
-        sessions.PersistClientPort(request.Radio, port, environment.ContentRootPath);
+        sessions.Persist();
 
         return new AddClientPortReply { Ok = true, Message = $"{appPort} ready", PortDisplay = appPort };
     }
@@ -102,6 +101,81 @@ public sealed class ControlService(
 
         return Task.FromResult(list);
     }
+
+    public override Task<RadioConfigList> GetRadioConfigs(GetRadioConfigsRequest request, ServerCallContext context)
+    {
+        var list = new RadioConfigList();
+        foreach (var options in sessions.GetConfigs())
+        {
+            list.Radios.Add(ToProto(options));
+        }
+
+        return Task.FromResult(list);
+    }
+
+    public override Task<ComPortList> ListComPorts(ListComPortsRequest request, ServerCallContext context)
+    {
+        var list = new ComPortList();
+        list.Ports.AddRange(System.IO.Ports.SerialPort.GetPortNames().OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
+        return Task.FromResult(list);
+    }
+
+    public override async Task<SaveRadioReply> SaveRadio(SaveRadioRequest request, ServerCallContext context)
+    {
+        var (ok, message) = await sessions.SaveRadioAsync(request.OriginalName, FromProto(request.Radio));
+        return new SaveRadioReply { Ok = ok, Message = message };
+    }
+
+    public override async Task<SaveRadioReply> DeleteRadio(DeleteRadioRequest request, ServerCallContext context)
+    {
+        var (ok, message) = await sessions.DeleteRadioAsync(request.Name);
+        return new SaveRadioReply { Ok = ok, Message = message };
+    }
+
+    private static RadioConfig ToProto(RadioSessionOptions options)
+    {
+        var config = new RadioConfig
+        {
+            Name = options.Name,
+            Protocol = options.Protocol,
+            Simulator = options.Simulator,
+            ComPort = options.ComPort ?? string.Empty,
+            BaudRate = options.BaudRate,
+        };
+
+        foreach (var port in options.ClientPorts)
+        {
+            config.ClientPorts.Add(new RadioClientPort
+            {
+                PortDisplay = port.PortDisplay,
+                Label = port.Label,
+                Ptt = port.Ptt,
+                MuxPort = port.MuxPort ?? string.Empty,
+                TcpPort = port.TcpPort ?? 0,
+                RigctldPort = port.RigctldPort ?? 0,
+            });
+        }
+
+        return config;
+    }
+
+    private static RadioSessionOptions FromProto(RadioConfig config) => new()
+    {
+        Name = config.Name,
+        Protocol = string.IsNullOrEmpty(config.Protocol) ? "Kenwood" : config.Protocol,
+        Simulator = config.Simulator,
+        ComPort = string.IsNullOrEmpty(config.ComPort) ? null : config.ComPort,
+        BaudRate = config.BaudRate == 0 ? 38400 : config.BaudRate,
+        ClientPorts = [.. config.ClientPorts.Select(p => new ClientPortOptions
+        {
+            PortDisplay = p.PortDisplay,
+            Label = p.Label,
+            Ptt = string.IsNullOrEmpty(p.Ptt) ? "CAT only" : p.Ptt,
+            MuxPort = string.IsNullOrEmpty(p.MuxPort) ? null : p.MuxPort,
+            TcpPort = p.TcpPort == 0 ? null : p.TcpPort,
+            RigctldPort = p.RigctldPort == 0 ? null : p.RigctldPort,
+        })],
+    };
 
     public override async Task StreamActivity(
         StreamActivityRequest request, IServerStreamWriter<ActivityEvent> responseStream, ServerCallContext context)
