@@ -66,8 +66,8 @@ public partial class MainWindow : Window
             SelectedIndex = 0,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
-        var port = new TextBox { Watermark = "auto (leave blank)", Width = 160, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
-        var label = new TextBox { Watermark = "optional", Width = 260, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var port = new TextBox { PlaceholderText = "auto (leave blank)", Width = 160, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var label = new TextBox { PlaceholderText = "optional", Width = 260, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
 
         var dialog = new Window
         {

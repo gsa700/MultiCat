@@ -16,7 +16,7 @@
 
     <StackPanel Spacing="3">
       <TextBlock Text="Name" FontSize="11" Foreground="#8E8E8E" />
-      <TextBox Text="{Binding Name}" Watermark="e.g. Shack K3" />
+      <TextBox Text="{Binding Name}" PlaceholderText="e.g. Shack K3" />
     </StackPanel>
 
     <StackPanel Spacing="3">
@@ -57,7 +57,7 @@
     <Grid ColumnDefinitions="*,10,90" IsVisible="{Binding ShowNetwork}">
       <StackPanel Grid.Column="0" Spacing="3">
         <TextBlock Text="Host or IP address" FontSize="11" Foreground="#8E8E8E" />
-        <TextBox Text="{Binding Host}" Watermark="192.168.1.40 or K4-SN1234.local" />
+        <TextBox Text="{Binding Host}" PlaceholderText="192.168.1.40 or K4-SN1234.local" />
       </StackPanel>
       <StackPanel Grid.Column="2" Spacing="3">
         <TextBlock Text="TCP port" FontSize="11" Foreground="#8E8E8E" />
