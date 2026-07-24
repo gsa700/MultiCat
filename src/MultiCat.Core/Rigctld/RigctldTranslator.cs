@@ -22,19 +22,25 @@ public sealed class RigctldTranslator(TransactionArbiter arbiter, string clientI
         ["CWR"] = '7', ["PKTLSB"] = '9',
     };
 
-    // Canned dump_state modeled on hamlib's dummy rig: wide RX range, all modes.
-    // Clients only need plausible capabilities; the radio's real limits still apply.
+    // Verbatim dump_state from Hamlib 4.7.2's own rigctl (model 1 dummy): protocol
+    // version 1 and 64-bit capability masks. Hamlib's netrigctl backend (used by
+    // Log4OM) rejects a rig whose caps it can't parse — returning Hamlib's exact
+    // output is the only reliable way to satisfy its parser across versions.
     private const string DumpState =
-        "0\n2\n2\n" +
-        "150000.000000 1500000000.000000 0x1ff -1 -1 0x10000003 0x3\n" +
+        "1\n1\n0\n" +
+        "150000.000000 1500000000.000000 0x1ff -1 -1 0x17e00007 0x1f\n" +
         "0 0 0 0 0 0 0\n" +
-        "150000.000000 1500000000.000000 0x1ff -1 -1 0x10000003 0x3\n" +
+        "150000.000000 1500000000.000000 0x1ff 5000 100000 0x17e00007 0x1f\n" +
         "0 0 0 0 0 0 0\n" +
         "0x1ff 1\n0x1ff 0\n0 0\n" +
-        "0x1e 2400\n0x2 500\n0x1 8000\n0x1 2400\n0x20 15000\n0x20 8000\n0x40 230000\n0 0\n" +
+        "0xc 2400\n0xc 1800\n0xc 3000\n0xc 0\n" +
+        "0x2 500\n0x2 2400\n0x2 50\n0x2 0\n" +
+        "0x10 300\n0x10 2400\n0x10 50\n0x10 0\n" +
+        "0x1 8000\n0x1 2400\n0x1 10000\n" +
+        "0x20 15000\n0x20 8000\n0x40 230000\n0 0\n" +
         "9990\n9990\n10000\n0\n" +
         "10 \n10 20 30 \n" +
-        "0x3effffff\n0x3effffff\n0x7fffffff\n0x7fffffff\n0x7fffffff\n0x7fffffff\n";
+        "0xffffffffffffffff\n0xffffffffffffffff\n0xfffffffff7ffffff\n0xfffeff7083ffffff\n0xffffffffffffffff\n0xffffffffffffffbf\n";
 
     private bool _pttOn;
 
@@ -133,6 +139,15 @@ public sealed class RigctldTranslator(TransactionArbiter arbiter, string clientI
                 return "0\nVFOA\n";
 
             case "S" or "\\set_split_vfo":
+                return Report(0);
+
+            // Power state: we can't query it, but a connected radio is on. Clients
+            // like Log4OM treat a "not implemented" here as "rig unavailable" and
+            // refuse to hold the connection, so answer "on".
+            case "\\get_powerstat":
+                return "1\n";
+
+            case "\\set_powerstat":
                 return Report(0);
 
             default:
