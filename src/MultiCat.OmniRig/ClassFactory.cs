@@ -31,7 +31,8 @@ public sealed class ClassFactory(Func<object> instanceProvider) : IClassFactory
         var unknown = Marshal.GetIUnknownForObject(instanceProvider());
         try
         {
-            return Marshal.QueryInterface(unknown, in riid, out ppvObject);
+            // net48's overload takes 'ref', not the newer 'in'.
+            return Marshal.QueryInterface(unknown, ref riid, out ppvObject);
         }
         finally
         {

@@ -16,7 +16,8 @@ using MultiCat.OmniRig;
 const uint ClsctxLocalServer = 4;
 const uint RegclsMultipleUse = 1;
 
-var exePath = Environment.ProcessPath!;
+// Environment.ProcessPath is net6+; on net48 take the path from the assembly.
+var exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
 
 switch (args.FirstOrDefault())
 {
@@ -174,8 +175,23 @@ static void Unregister()
     }
 }
 
-internal sealed record ServerSettings(string Host, int Rig1Port, int? Rig2Port)
+// A plain class, not a record: positional records need init-only setters, which
+// net48 lacks without an IsExternalInit shim. Nothing here needs record semantics.
+internal sealed class ServerSettings
 {
+    public ServerSettings(string host, int rig1Port, int? rig2Port)
+    {
+        Host = host;
+        Rig1Port = rig1Port;
+        Rig2Port = rig2Port;
+    }
+
+    public string Host { get; }
+
+    public int Rig1Port { get; }
+
+    public int? Rig2Port { get; }
+
     /// <summary>Shared config the MultiCAT service writes when a radio is assigned to
     /// OmniRig. In ProgramData so both processes find it without knowing each other's
     /// install path. Falls back to a file next to the exe, then to the default.</summary>
