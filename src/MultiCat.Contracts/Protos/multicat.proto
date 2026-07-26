@@ -16,6 +16,27 @@ service MultiCatControl {
   rpc DeleteRadio (DeleteRadioRequest) returns (SaveRadioReply);
   rpc ListComPorts (ListComPortsRequest) returns (ComPortList);
   rpc SetClientNickname (SetClientNicknameRequest) returns (SaveRadioReply);
+  rpc SetFlexAdvertising (SetFlexAdvertisingRequest) returns (SaveRadioReply);
+}
+
+// Start or stop presenting a radio to a Genius stack. Deliberate, because
+// advertising makes the stack follow this radio and move real antenna and
+// amplifier state.
+message SetFlexAdvertisingRequest {
+  string radio = 1;
+  bool advertising = 2;
+}
+
+// State of a radio's Flex endpoint, for the panel that shows it.
+message FlexStatus {
+  bool configured = 1;
+  bool advertising = 2;      // the operator's switch
+  bool online = 3;           // actually announcing right now
+  string serial = 4;         // what the boxes pair on
+  int32 command_port = 5;
+  string targets = 6;        // pinned box addresses, or the broadcast address
+  int32 connected_boxes = 7;
+  string callsign = 8;
 }
 
 // A friendly name for a client app, keyed by its process name (stable across
@@ -86,6 +107,7 @@ message RadioInfo {
   bool tx_on_vfo_b = 17;        // which VFO the arrow points at
   string mode_a = 18;
   string mode_b = 19;           // empty when unknown (rigctld exposes one mode)
+  FlexStatus flex = 20;
 }
 
 message ClientPortInfo {

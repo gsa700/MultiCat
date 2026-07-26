@@ -61,6 +61,67 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnToggleFlexAdvertising(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { CanEdit: true } vm || vm.SelectedRadio is not { } radio)
+        {
+            return;
+        }
+
+        // Starting is the consequential direction: the stack begins following this
+        // radio and moves real antenna and amplifier state, so say so first. Stopping
+        // is the safe direction and needs no ceremony.
+        if (!radio.FlexAdvertising)
+        {
+            var targets = radio.FlexTargets.Length > 0 ? radio.FlexTargets : "the local network";
+            if (!await ConfirmAsync(
+                    "Advertise to the Genius stack?",
+                    $"MultiCAT will announce \"{radio.Name}\" as a radio to {targets}.\n\n" +
+                    "Any 4O3A box that follows it will switch antennas and set amplifier band " +
+                    "from this radio's transmit frequency.",
+                    "Start advertising"))
+            {
+                return;
+            }
+        }
+
+        await vm.ToggleFlexAdvertisingAsync();
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        var yes = new Button { Content = confirmText, MinWidth = 120, IsDefault = true };
+        var no = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true };
+        yes.Click += (_, _) => dialog.Close(true);
+        no.Click += (_, _) => dialog.Close(false);
+        dialog.Content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(18),
+            Spacing = 14,
+            Children =
+            {
+                new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Children = { no, yes },
+                },
+            },
+        };
+
+        return await dialog.ShowDialog<bool>(this);
+    }
+
     private async void OnAddRadio(object? sender, RoutedEventArgs e)
     {
         if (ViewModel is not { CanEdit: true } vm)

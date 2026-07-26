@@ -18,6 +18,25 @@ public sealed class ControlService(
         return Task.FromResult(new SaveRadioReply { Ok = true, Message = "nickname saved" });
     }
 
+    public override Task<SaveRadioReply> SetFlexAdvertising(SetFlexAdvertisingRequest request, ServerCallContext context)
+    {
+        var session = sessions.FindSession(request.Radio);
+        if (session is null)
+        {
+            return Task.FromResult(new SaveRadioReply { Ok = false, Message = $"unknown radio '{request.Radio}'" });
+        }
+
+        session.SetFlexAdvertising(request.Advertising);
+        sessions.Persist();     // the operator's choice survives a restart
+        return Task.FromResult(new SaveRadioReply
+        {
+            Ok = true,
+            Message = request.Advertising
+                ? "advertising to the Genius stack"
+                : "stopped advertising; boxes revert to their no-transceiver antenna",
+        });
+    }
+
     public override Task<DriverState> GetDriverState(GetDriverStateRequest request, ServerCallContext context)
     {
         return Task.FromResult(new DriverState
@@ -110,6 +129,7 @@ public sealed class ControlService(
                 TxOnVfoB = session.TransmitOnVfoB,
                 ModeA = session.ModeA,
                 ModeB = session.ModeB,
+                Flex = ToProto(session.FlexStatus()),
                 Connection = options.Simulator ? "Simulator" : options.Connection,
                 Protocol = options.Protocol,
                 ComPort = options.ComPort ?? string.Empty,
@@ -156,6 +176,18 @@ public sealed class ControlService(
 
         return Task.FromResult(list);
     }
+
+    private static FlexStatus ToProto(RadioSession.FlexStatusInfo status) => new()
+    {
+        Configured = status.Configured,
+        Advertising = status.Advertising,
+        Online = status.Online,
+        Serial = status.Serial,
+        CommandPort = status.CommandPort,
+        Targets = status.Targets,
+        ConnectedBoxes = status.ConnectedBoxes,
+        Callsign = status.Callsign,
+    };
 
     public override Task<RadioConfigList> GetRadioConfigs(GetRadioConfigsRequest request, ServerCallContext context)
     {

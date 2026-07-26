@@ -187,6 +187,38 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Starts or stops presenting the selected radio to a Genius stack. Deliberate by
+    /// design: advertising makes the stack follow this radio and move real antenna and
+    /// amplifier state, so it is an action rather than a checkbox side effect.
+    /// </summary>
+    public async Task ToggleFlexAdvertisingAsync()
+    {
+        if (_connection is null || SelectedRadio is null)
+        {
+            ServiceStatus = "service offline — cannot change advertising";
+            return;
+        }
+
+        var wanted = !SelectedRadio.FlexAdvertising;
+        try
+        {
+            var reply = await _connection.Client.SetFlexAdvertisingAsync(
+                new SetFlexAdvertisingRequest { Radio = SelectedRadio.Name, Advertising = wanted },
+                deadline: DateTime.UtcNow.AddSeconds(10));
+
+            ServiceStatus = reply.Message;
+            if (reply.Ok)
+            {
+                SelectedRadio.FlexAdvertising = wanted;
+            }
+        }
+        catch (Exception ex)
+        {
+            ServiceStatus = $"could not change advertising: {ex.Message}";
+        }
+    }
+
     /// <summary>True when connected to a live service (radio editing is possible).</summary>
     public bool CanEdit => _connection is not null;
 
@@ -307,6 +339,16 @@ public partial class MainViewModel : ViewModelBase
                 ReconcileClients(radio, info.Clients);
                 radio.ModeA = info.ModeA;
                 radio.ModeB = info.ModeB;
+                if (info.Flex is { } flex)
+                {
+                    radio.FlexConfigured = flex.Configured;
+                    radio.FlexAdvertising = flex.Advertising;
+                    radio.FlexOnline = flex.Online;
+                    radio.FlexSerial = flex.Serial;
+                    radio.FlexCommandPort = flex.CommandPort;
+                    radio.FlexTargets = flex.Targets;
+                    radio.FlexConnectedBoxes = flex.ConnectedBoxes;
+                }
                 UpdateQuietNote(radio);
             }
         }

@@ -101,6 +101,52 @@ public partial class RadioItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(VfoBIsTransmit));
     }
 
+    // --- Flex endpoint: its own panel rather than a ports-table row, because this
+    //     is MultiCAT impersonating a radio that physically moves amplifier, tuner
+    //     and antenna state — not just a port an app connects to.
+    [ObservableProperty]
+    public partial bool FlexConfigured { get; set; }
+
+    [ObservableProperty]
+    public partial bool FlexAdvertising { get; set; }
+
+    [ObservableProperty]
+    public partial bool FlexOnline { get; set; }
+
+    [ObservableProperty]
+    public partial string FlexSerial { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial int FlexCommandPort { get; set; }
+
+    [ObservableProperty]
+    public partial string FlexTargets { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial int FlexConnectedBoxes { get; set; }
+
+    /// <summary>Reads the live state plainly, so "am I advertising a radio to the
+    /// stack right now?" is never something to infer.</summary>
+    public string FlexStateText => FlexOnline
+        ? $"advertising · {FlexConnectedBoxes} box(es) connected"
+        : FlexAdvertising ? "waiting for the radio" : "not advertising";
+
+    public string FlexButtonText => FlexAdvertising ? "Stop advertising" : "Start advertising";
+
+    public string FlexPortText => $"port {FlexCommandPort}";
+
+    partial void OnFlexOnlineChanged(bool value) => OnPropertyChanged(nameof(FlexStateText));
+
+    partial void OnFlexConnectedBoxesChanged(int value) => OnPropertyChanged(nameof(FlexStateText));
+
+    partial void OnFlexAdvertisingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(FlexStateText));
+        OnPropertyChanged(nameof(FlexButtonText));
+    }
+
+    partial void OnFlexCommandPortChanged(int value) => OnPropertyChanged(nameof(FlexPortText));
+
     public long? LastFrequencyHz { get; set; }
 
     public string? LastMode { get; set; }

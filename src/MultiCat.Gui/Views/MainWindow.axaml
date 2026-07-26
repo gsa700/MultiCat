@@ -141,6 +141,31 @@
                                       Clients="{Binding Clients}" />
         </Border>
 
+        <!-- Flex endpoint: its own panel, not a ports row — this is MultiCAT
+             impersonating a radio that physically moves amp/tuner/antenna state,
+             so its on/off is an explicit action with the blast radius visible. -->
+        <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="14,10"
+                IsVisible="{Binding FlexConfigured}">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" FontSize="12" Padding="12,6" VerticalAlignment="Center"
+                    Content="{Binding FlexButtonText}" Click="OnToggleFlexAdvertising" />
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="Genius stack (Flex)" FontSize="13" FontWeight="Medium" />
+                <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                         Fill="{Binding FlexOnline, Converter={x:Static vm:Converters.ActiveBrush}}" />
+                <TextBlock Text="{Binding FlexStateText}" FontSize="12" Foreground="#8E8E8E" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="18">
+                <TextBlock FontSize="11" Foreground="#8E8E8E" FontFamily="Cascadia Mono,Consolas"
+                           Text="{Binding FlexSerial}" />
+                <TextBlock FontSize="11" Foreground="#8E8E8E" Text="{Binding FlexPortText}" />
+                <TextBlock FontSize="11" Foreground="#8E8E8E" Text="{Binding FlexTargets}" />
+              </StackPanel>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
         <DockPanel>
           <Button DockPanel.Dock="Right" FontSize="12" Padding="10,5"
                   Click="OnAddPort">+ Add port</Button>

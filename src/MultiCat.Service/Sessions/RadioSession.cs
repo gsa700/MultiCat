@@ -75,6 +75,13 @@ public sealed record ClientPortOptions
     /// <summary>Station callsign advertised to the stack.</summary>
     public string? FlexCallsign { get; init; }
 
+    /// <summary>
+    /// Whether to actually advertise. Off by default and mutable: announcing makes a
+    /// Genius stack follow this radio and move real antenna and amplifier state, so
+    /// it should be a decision the operator takes, not a side effect of adding a port.
+    /// </summary>
+    public bool FlexAdvertising { get; set; }
+
     /// <summary>1 or 2 when this rigctld port is also exposed through OmniRig as that Rig.
     /// Mutable so an OmniRig assignment can be added to an existing rigctld port.</summary>
     public int? OmnirigRig { get; set; }
@@ -103,6 +110,51 @@ public sealed class RadioSession : IAsyncDisposable
     private Flex.FlexCommandServer? _flexServer;
     private Flex.FlexDiscoveryBroadcaster? _flexDiscovery;
     private Flex.FlexPresenceSupervisor? _flexPresence;
+    private ClientPortOptions? _flexPort;
+    private Core.Flex.FlexIdentity? _flexIdentity;
+
+    /// <summary>What the Flex endpoint is doing, for the panel that shows it.</summary>
+    public readonly record struct FlexStatusInfo(
+        bool Configured,
+        bool Advertising,
+        bool Online,
+        string Serial,
+        int CommandPort,
+        string Targets,
+        int ConnectedBoxes,
+        string Callsign);
+
+    public FlexStatusInfo FlexStatus()
+    {
+        if (_flexPort is not { FlexPort: { } port } flex || _flexIdentity is not { } identity)
+        {
+            return new FlexStatusInfo(false, false, false, string.Empty, 0, string.Empty, 0, string.Empty);
+        }
+
+        return new FlexStatusInfo(
+            Configured: true,
+            Advertising: flex.FlexAdvertising,
+            Online: _flexPresence?.Online == true,
+            Serial: identity.Serial,
+            CommandPort: port,
+            Targets: flex.FlexTargets.Count > 0
+                ? string.Join(", ", flex.FlexTargets)
+                : $"broadcast {flex.FlexBroadcastAddress ?? "255.255.255.255"}",
+            ConnectedBoxes: _flexServer?.ClientCount ?? 0,
+            Callsign: identity.Callsign);
+    }
+
+    /// <summary>
+    /// Starts or stops advertising. The supervisor picks the change up on its next
+    /// tick and brings the stack up or down through the usual debounced path.
+    /// </summary>
+    public void SetFlexAdvertising(bool advertising)
+    {
+        if (_flexPort is not null)
+        {
+            _flexPort.FlexAdvertising = advertising;
+        }
+    }
 
     public RadioSession(RadioSessionOptions options, ILoggerFactory loggerFactory)
     {
@@ -441,8 +493,14 @@ public sealed class RadioSession : IAsyncDisposable
 
             // Discovery is started by the supervisor rather than here: the stack
             // should only ever see a radio that is actually answering.
+            _flexPort = port;
+            _flexIdentity = identity;
+
+            // Advertising is gated on the operator's switch as well as the radio, so
+            // turning it off tears the stack down through the same debounced path a
+            // radio going away would — boxes revert to their no-transceiver antenna.
             _flexPresence = new Flex.FlexPresenceSupervisor(
-                isPresent: () => IsConnected,
+                isPresent: () => IsConnected && port.FlexAdvertising,
                 goOnline: () =>
                 {
                     _flexServer!.Accepting = true;
