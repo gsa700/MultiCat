@@ -293,6 +293,13 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 radio.IsConnected = info.Connected;
+
+                // Resync the sidebar and status line from the service. A radio can
+                // drop and recover (rig powered off, PC standby) with no activity
+                // event to correct these, which used to leave a stale "connecting…".
+                radio.ConnectionSummary = info.ConnectionSummary;
+                radio.StatusText = info.StatusText;
+
                 ReconcileClients(radio, info.Clients);
                 UpdateQuietNote(radio);
             }

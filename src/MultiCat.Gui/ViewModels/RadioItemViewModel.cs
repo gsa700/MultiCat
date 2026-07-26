@@ -7,7 +7,10 @@ public partial class RadioItemViewModel : ViewModelBase
 {
     public required string Name { get; init; }
 
-    public required string ConnectionSummary { get; init; }
+    // Observable, not init-only: a radio can drop and recover (rig powered off,
+    // PC standby) long after the list was built, and the sidebar must follow.
+    [ObservableProperty]
+    public partial string ConnectionSummary { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial bool IsConnected { get; set; }
