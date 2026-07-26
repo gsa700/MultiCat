@@ -18,8 +18,14 @@
     <ProjectReference Include="..\MultiCat.Contracts\MultiCat.Contracts.csproj" />
   </ItemGroup>
 
-  <!-- Bundled Hamlib (LGPL) — supervised rigctld drives radios with real hamlib. -->
+  <!-- Bundled Hamlib (LGPL) — supervised rigctld drives radios with real hamlib.
+       ExcludeFromSingleFile keeps rigctld.exe + its DLLs as loose files (so rigctld
+       finds libhamlib next to it); otherwise single-file publish embeds the natives. -->
   <ItemGroup>
-    <Content Include="hamlib\**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="hamlib\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
   </ItemGroup>
 </Project>
