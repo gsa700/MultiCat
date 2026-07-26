@@ -102,6 +102,14 @@ public sealed class RigctldSupervisor(RigctldOptions options, ILogger<RigctldSup
             {
                 process.Start();
                 _process = process;
+
+                // Tie it to this process so a crash or a force-kill cannot leave it
+                // running and holding the radio's CAT connection.
+                if (OperatingSystem.IsWindows())
+                {
+                    ChildProcessJob.TryAssign(process, logger);
+                }
+
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
                 await process.WaitForExitAsync(cancellationToken);

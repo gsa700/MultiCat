@@ -32,6 +32,12 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        // An earlier run that crashed or was killed leaves its rigctld behind, still
+        // holding a connection to the radio — enough to stop this start connecting.
+        // Clear those before opening anything.
+        Rigctld.OrphanedRigctld.Sweep(
+            Path.Combine(AppContext.BaseDirectory, "hamlib", "rigctld.exe"), _logger);
+
         var configs = _store.Load();
         if (configs.Count == 0)
         {
