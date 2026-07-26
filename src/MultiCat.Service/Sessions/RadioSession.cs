@@ -147,7 +147,7 @@ public sealed class RadioSession : IAsyncDisposable
 
                 if (_tracker.Mode != beforeMode && _tracker.Mode is { } m)
                 {
-                    mode = m;
+                    mode = ModeNames.ToDisplay(m);
                 }
 
                 if (_tracker.Transmitting != beforeTx && _tracker.Transmitting is { } tx)
@@ -204,7 +204,7 @@ public sealed class RadioSession : IAsyncDisposable
                 }
 
                 var f = _poller.FrequencyHz is { } phz ? $" · {phz / 1000.0:N2} kHz" : string.Empty;
-                var md = _poller.Mode is { } pm ? $" · {pm}" : string.Empty;
+                var md = _poller.Mode is { } pm ? $" · {ModeNames.ToDisplay(pm)}" : string.Empty;
                 return $"connected{f}{md}";
             }
 
@@ -214,7 +214,7 @@ public sealed class RadioSession : IAsyncDisposable
             }
 
             var freq = _tracker.FrequencyHz is { } hz ? $" · {hz / 1000.0:N2} kHz" : string.Empty;
-            var mode = _tracker.Mode is { } m ? $" · {m}" : string.Empty;
+            var mode = _tracker.Mode is { } m ? $" · {ModeNames.ToDisplay(m)}" : string.Empty;
             return $"connected{freq}{mode}";
         }
     }
@@ -277,7 +277,7 @@ public sealed class RadioSession : IAsyncDisposable
             TimeSpan.FromMilliseconds(500),
             _loggerFactory.CreateLogger<RigctldClientPoller>());
         _poller.FrequencyChanged += hz => RaisePollActivity($"f {hz / 1000.0:N2} kHz", frequency: hz);
-        _poller.ModeChanged += m => RaisePollActivity($"m {m}", mode: m);
+        _poller.ModeChanged += m => RaisePollActivity($"m {m}", mode: ModeNames.ToDisplay(m));
         _poller.TransmitChanged += tx => RaisePollActivity(tx ? "TX" : "RX", ptt: tx ? "tx" : "rx");
         _poller.Start();
 

@@ -82,7 +82,7 @@ public class RigctldTranslatorTests
         Assert.Equal("CHKVFO 0\n", await _translator.HandleLineAsync("\\chk_vfo"));
         var dump = await _translator.HandleLineAsync("\\dump_state");
         Assert.NotNull(dump);
-        Assert.StartsWith("0\n2\n2\n", dump);
+        Assert.StartsWith("1\n1\n0\n", dump); // real-hamlib v1 dump_state header
         Assert.Empty(_radio.Sent);
     }
 
