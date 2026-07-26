@@ -37,13 +37,11 @@ WHAT'S IN THIS FOLDER
 3. POINT YOUR SOFTWARE AT MULTICAT (no COM driver needed)
    MultiCAT exposes your radio over the network so multiple apps share it:
 
-   WSJT-X / JTDX / fldigi / GridTracker / any hamlib app:
-     Rig: "Hamlib NET rigctl"
+   WSJT-X / JTDX / fldigi / GridTracker / Log4OM / any hamlib app:
+     Rig: "Hamlib NET rigctl"  (in Log4OM: the Hamlib/rigctld CAT option)
      Network Server: 127.0.0.1:4532
-
-   Log4OM / CW Skimmer / SDR Console / other OmniRig apps:
-     Run "MultiCat.OmniRig\Register OmniRig.cmd" once (accept the prompt),
-     then choose OmniRig / "Rig 1" in the app.
+   MultiCAT runs a real hamlib rigctld for the radio, so any hamlib-aware
+   app connects and tracks — multiple apps share the one radio at once.
 
    Anything that speaks raw CAT over TCP: 127.0.0.1:4533
 
@@ -52,11 +50,12 @@ WHAT'S IN THIS FOLDER
 
 
 KNOWN LIMITS IN THIS PRE-ALPHA
-  - Radios are configured by editing appsettings.json (no GUI editor yet).
+  - Supervised real rigctld is verified with network radios (e.g. Elecraft
+    K4/K4D). Serial radios aren't wired for it yet — use a network rig for now.
   - Real virtual COM ports (for apps like N1MM+ that only speak serial) need a
     signed com0com/VSP driver, which current Windows 11 builds reject. The
     network endpoints above are the recommended path and need no driver.
-  - The OmniRig server works with most OmniRig apps; WSJT-X's OmniRig backend
-    is not yet supported (use the rigctld path above for WSJT-X).
+  - OmniRig is a dead end for late-bound clients on modern Windows; use the
+    Hamlib/rigctld path above instead (Log4OM, CW Skimmer, etc. support it).
 
 Source, license (GPLv3), and issues: https://github.com/gsa700/MultiCat
