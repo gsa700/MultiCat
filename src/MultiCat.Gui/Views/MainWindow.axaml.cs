@@ -11,9 +11,55 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Closed += (_, _) => (DataContext as MainViewModel)?.Shutdown();
+        SignalFlow.ClientClicked += OnClientRename;
     }
 
     private MainViewModel? ViewModel => DataContext as MainViewModel;
+
+    private async void OnClientRename(ClientConnectionViewModel client)
+    {
+        if (ViewModel is not { CanEdit: true } vm)
+        {
+            return;
+        }
+
+        var box = new TextBox { Text = client.DisplayName, Watermark = client.ProcessName, MinWidth = 240 };
+        var dialog = new Window
+        {
+            Title = "Rename connection",
+            Width = 320,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        var save = new Button { Content = "Save", MinWidth = 80, IsDefault = true };
+        var cancel = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true };
+        save.Click += (_, _) => dialog.Close(true);
+        cancel.Click += (_, _) => dialog.Close(false);
+        dialog.Content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(18),
+            Spacing = 10,
+            Children =
+            {
+                new TextBlock { Text = $"Nickname for \"{client.ProcessName}\"", FontSize = 12, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
+                box,
+                new TextBlock { Text = "Applies to every connection from this app. Clear to reset.", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E"), TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Children = { cancel, save },
+                },
+            },
+        };
+
+        if (await dialog.ShowDialog<bool>(this))
+        {
+            await vm.SetClientNicknameAsync(client.ProcessName, box.Text ?? string.Empty);
+        }
+    }
 
     private async void OnAddRadio(object? sender, RoutedEventArgs e)
     {

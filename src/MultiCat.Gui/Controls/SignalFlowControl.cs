@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -9,29 +10,37 @@ using MultiCat.Gui.ViewModels;
 namespace MultiCat.Gui.Controls;
 
 /// <summary>
-/// The signal-flow diagram: radio on the left, the MultiCAT hub in the middle,
-/// client ports fanned out on the right. Animated pulses ride the links —
-/// amber toward the radio (commands), teal toward the clients (responses).
+/// The signal-flow diagram: radio on the left, the MultiCAT hub in the middle, and a
+/// bubble per live client connection fanned out on the right. Pulses ride the links —
+/// amber toward the radio (commands), teal toward the clients (responses) — driven by
+/// real activity plus a gentle heartbeat so connected clients read as alive. Click a
+/// client bubble to rename it.
 /// </summary>
 public class SignalFlowControl : Control
 {
     public static readonly StyledProperty<string?> RadioNameProperty =
         AvaloniaProperty.Register<SignalFlowControl, string?>(nameof(RadioName), "Radio");
 
-    public static readonly StyledProperty<IEnumerable<string>?> PortsProperty =
-        AvaloniaProperty.Register<SignalFlowControl, IEnumerable<string>?>(nameof(Ports));
+    public static readonly StyledProperty<IEnumerable<ClientConnectionViewModel>?> ClientsProperty =
+        AvaloniaProperty.Register<SignalFlowControl, IEnumerable<ClientConnectionViewModel>?>(nameof(Clients));
 
     private static readonly IBrush CommandBrush = new SolidColorBrush(Color.Parse("#EF9F27"));
     private static readonly IBrush ResponseBrush = new SolidColorBrush(Color.Parse("#1D9E75"));
     private static readonly IPen LinkPen = new Pen(new SolidColorBrush(Color.Parse("#808080"), 0.35), 1.5);
 
     private readonly List<Pulse> _pulses = [];
+    private readonly List<(Rect Rect, ClientConnectionViewModel Client)> _clientHitboxes = [];
     private DispatcherTimer? _timer;
+    private RadioItemViewModel? _boundVm;
+    private int _heartbeat;
 
     static SignalFlowControl()
     {
-        AffectsRender<SignalFlowControl>(RadioNameProperty, PortsProperty);
+        AffectsRender<SignalFlowControl>(RadioNameProperty, ClientsProperty);
     }
+
+    /// <summary>Raised when the user clicks a client bubble (to rename it).</summary>
+    public event Action<ClientConnectionViewModel>? ClientClicked;
 
     public string? RadioName
     {
@@ -39,13 +48,11 @@ public class SignalFlowControl : Control
         set => SetValue(RadioNameProperty, value);
     }
 
-    public IEnumerable<string>? Ports
+    public IEnumerable<ClientConnectionViewModel>? Clients
     {
-        get => GetValue(PortsProperty);
-        set => SetValue(PortsProperty, value);
+        get => GetValue(ClientsProperty);
+        set => SetValue(ClientsProperty, value);
     }
-
-    private RadioItemViewModel? _boundVm;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -62,12 +69,11 @@ public class SignalFlowControl : Control
         }
     }
 
-    /// <summary>A real activity event asks for a pulse on a given link. Link 0 is the
-    /// radio↔hub link; link N (1-based) is the Nth client port. TowardRadio moves the
-    /// pulse toward the radio/hub end (amber = command), else toward the far end (teal).</summary>
+    // link 0 = radio↔hub; link N (1-based) = the Nth client. TowardRadio moves the
+    // pulse toward the radio/hub end (amber command), else toward the far end (teal).
     private void OnPulse(int link, bool towardRadio)
     {
-        if (_pulses.Count < 32)
+        if (_pulses.Count < 48)
         {
             _pulses.Add(new Pulse { Link = link, TowardRadio = towardRadio });
         }
@@ -100,11 +106,39 @@ public class SignalFlowControl : Control
         base.OnDetachedFromVisualTree(e);
     }
 
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        var p = e.GetPosition(this);
+        foreach (var (rect, client) in _clientHitboxes)
+        {
+            if (rect.Contains(p))
+            {
+                ClientClicked?.Invoke(client);
+                return;
+            }
+        }
+    }
+
     private void OnTick(object? sender, EventArgs e)
     {
+        var clientCount = Clients?.Count() ?? 0;
+
+        // Heartbeat: every ~1.4 s, if clients are connected, send a teal pulse out to
+        // each of them (and one in from the radio) so the topology reads as alive.
+        if (++_heartbeat >= 42 && clientCount > 0)
+        {
+            _heartbeat = 0;
+            OnPulse(0, towardRadio: false);
+            for (var i = 1; i <= clientCount; i++)
+            {
+                OnPulse(i, towardRadio: false);
+            }
+        }
+
         if (_pulses.Count == 0)
         {
-            return; // nothing moving; idle when there's no traffic
+            return;
         }
 
         for (var i = _pulses.Count - 1; i >= 0; i--)
@@ -121,6 +155,7 @@ public class SignalFlowControl : Control
 
     public override void Render(DrawingContext context)
     {
+        _clientHitboxes.Clear();
         var bounds = Bounds;
         if (bounds.Width < 200 || bounds.Height < 80)
         {
@@ -131,22 +166,22 @@ public class SignalFlowControl : Control
         var textBrush = new SolidColorBrush(isDark ? Color.Parse("#E8E8E8") : Color.Parse("#2C2C2A"));
         var mutedBrush = new SolidColorBrush(Color.Parse("#8E8E8E"));
 
-        var ports = Ports?.ToList() ?? [];
+        var clients = Clients?.ToList() ?? [];
         var cy = bounds.Height / 2;
 
         var radioRect = new Rect(12, cy - 24, 118, 48);
         var hubRect = new Rect((bounds.Width - 112) / 2, cy - 26, 112, 52);
-        var portWidth = 126.0;
-        var portX = bounds.Width - portWidth - 12;
+        var clientWidth = 140.0;
+        var clientX = bounds.Width - clientWidth - 12;
 
-        var portRects = new List<Rect>();
-        if (ports.Count > 0)
+        var clientRects = new List<Rect>();
+        if (clients.Count > 0)
         {
-            var step = (bounds.Height - 16) / ports.Count;
-            for (var i = 0; i < ports.Count; i++)
+            var step = (bounds.Height - 16) / clients.Count;
+            for (var i = 0; i < clients.Count; i++)
             {
-                var y = 8 + (step * i) + ((step - 26) / 2);
-                portRects.Add(new Rect(portX, y, portWidth, 26));
+                var y = 8 + (step * i) + ((step - 28) / 2);
+                clientRects.Add(new Rect(clientX, y, clientWidth, 28));
             }
         }
 
@@ -154,7 +189,7 @@ public class SignalFlowControl : Control
         {
             Bezier(new Point(radioRect.Right, radioRect.Center.Y), new Point(hubRect.Left, hubRect.Center.Y)),
         };
-        foreach (var rect in portRects)
+        foreach (var rect in clientRects)
         {
             links.Add(Bezier(new Point(hubRect.Right, hubRect.Center.Y), new Point(rect.Left, rect.Center.Y)));
         }
@@ -186,9 +221,18 @@ public class SignalFlowControl : Control
 
         DrawNode(context, radioRect, RadioName ?? "Radio", "#378ADD", isDark, textBrush, 12);
         DrawNode(context, hubRect, "MultiCAT", "#7F77DD", isDark, textBrush, 13);
-        for (var i = 0; i < portRects.Count; i++)
+        for (var i = 0; i < clientRects.Count; i++)
         {
-            DrawNode(context, portRects[i], ports[i], "#8E8E8E", isDark, mutedBrush, 11);
+            DrawNode(context, clientRects[i], clients[i].DisplayName, "#1D9E75", isDark, textBrush, 11);
+            _clientHitboxes.Add((clientRects[i], clients[i]));
+        }
+
+        if (clients.Count == 0)
+        {
+            var hint = new FormattedText(
+                "no apps connected", CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                new Typeface("Inter, Segoe UI"), 11, mutedBrush);
+            context.DrawText(hint, new Point(clientX, cy - (hint.Height / 2)));
         }
     }
 

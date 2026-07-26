@@ -30,6 +30,10 @@ public partial class RadioItemViewModel : ViewModelBase
 
     public ObservableCollection<ClientPortViewModel> Ports { get; init; } = [];
 
+    /// <summary>Live apps connected to this radio's rigctld port(s) — one bubble each
+    /// in the signal-flow diagram. Reconciled from the service on the status timer.</summary>
+    public ObservableCollection<ClientConnectionViewModel> Clients { get; init; } = [];
+
     public ObservableCollection<TrafficEntry> Traffic { get; init; } = [];
 
     public string[] FlowPortLabels => [.. Ports.Select(p => p.FlowLabel)];

@@ -291,11 +291,68 @@ public partial class MainViewModel : ViewModelBase
                         port.IsActive = portInfo.Active;
                     }
                 }
+
+                ReconcileClients(radio, info.Clients);
             }
         }
         catch (Exception)
         {
             // Transient; the next tick tries again.
+        }
+    }
+
+    // Bring a radio's live client bubbles in line with the service without rebuilding
+    // the collection (which would flicker the diagram): drop gone, add new, rename.
+    private static void ReconcileClients(RadioItemViewModel radio, IEnumerable<ClientConnection> live)
+    {
+        var liveList = live.ToList();
+        var liveKeys = liveList.Select(c => $"{c.ProcessName}:{c.ConnectionId}").ToHashSet();
+
+        for (var i = radio.Clients.Count - 1; i >= 0; i--)
+        {
+            if (!liveKeys.Contains(radio.Clients[i].Key))
+            {
+                radio.Clients.RemoveAt(i);
+            }
+        }
+
+        foreach (var c in liveList)
+        {
+            var existing = radio.Clients.FirstOrDefault(x => x.Key == $"{c.ProcessName}:{c.ConnectionId}");
+            if (existing is null)
+            {
+                radio.Clients.Add(new ClientConnectionViewModel
+                {
+                    ProcessName = c.ProcessName,
+                    ConnectionId = c.ConnectionId,
+                    DisplayName = c.DisplayName,
+                });
+            }
+            else if (existing.DisplayName != c.DisplayName)
+            {
+                existing.DisplayName = c.DisplayName;
+            }
+        }
+    }
+
+    /// <summary>Persists a friendly name for a client process, then refreshes so every
+    /// bubble for that app updates.</summary>
+    public async Task SetClientNicknameAsync(string processName, string nickname)
+    {
+        if (_connection is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _connection.Client.SetClientNicknameAsync(
+                new SetClientNicknameRequest { ProcessName = processName, Nickname = nickname });
+            await RefreshStatusesAsync();
+        }
+        catch (Exception ex)
+        {
+            ServiceStatus = $"rename failed: {ex.Message}";
         }
     }
 
@@ -479,6 +536,16 @@ public partial class MainViewModel : ViewModelBase
                 Ptt = port.Ptt,
                 Status = port.Status,
                 IsActive = port.Active,
+            });
+        }
+
+        foreach (var client in radio.Clients)
+        {
+            vm.Clients.Add(new ClientConnectionViewModel
+            {
+                ProcessName = client.ProcessName,
+                ConnectionId = client.ConnectionId,
+                DisplayName = client.DisplayName,
             });
         }
 

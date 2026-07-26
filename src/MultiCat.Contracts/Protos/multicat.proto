@@ -15,6 +15,22 @@ service MultiCatControl {
   rpc SaveRadio (SaveRadioRequest) returns (SaveRadioReply);
   rpc DeleteRadio (DeleteRadioRequest) returns (SaveRadioReply);
   rpc ListComPorts (ListComPortsRequest) returns (ComPortList);
+  rpc SetClientNickname (SetClientNicknameRequest) returns (SaveRadioReply);
+}
+
+// A friendly name for a client app, keyed by its process name (stable across
+// reconnects). Persisted so the nickname sticks.
+message SetClientNicknameRequest {
+  string process_name = 1;
+  string nickname = 2;
+}
+
+// One app currently connected to a radio's rigctld port.
+message ClientConnection {
+  string process_name = 1;   // OS process name (e.g. "L4ONG")
+  string display_name = 2;   // nickname if set, else a friendly default, else process_name
+  int32 connection_id = 3;   // stable per-connection id (client ephemeral port)
+  int32 rigctld_port = 4;
 }
 
 message GetRadiosRequest {}
@@ -62,6 +78,7 @@ message RadioInfo {
   int32 baud_rate = 10;
   string host = 11;
   int32 tcp_port = 12;
+  repeated ClientConnection clients = 13;   // apps currently connected to this radio
 }
 
 message ClientPortInfo {

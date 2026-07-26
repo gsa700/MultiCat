@@ -9,8 +9,15 @@ namespace MultiCat.Service;
 public sealed class ControlService(
     SessionManager sessions,
     Com0ComManager driver,
+    ClientNicknameStore nicknames,
     MultiCat.Service.OmniRig.OmniRigCoordinator omnirig) : MultiCatControl.MultiCatControlBase
 {
+    public override Task<SaveRadioReply> SetClientNickname(SetClientNicknameRequest request, ServerCallContext context)
+    {
+        nicknames.Set(request.ProcessName, request.Nickname);
+        return Task.FromResult(new SaveRadioReply { Ok = true, Message = "nickname saved" });
+    }
+
     public override Task<DriverState> GetDriverState(GetDriverStateRequest request, ServerCallContext context)
     {
         return Task.FromResult(new DriverState
@@ -124,6 +131,17 @@ public sealed class ControlService(
                 {
                     PortDisplay = "internal", Label = "n1mm / wsjtx demo pollers",
                     Ptt = "none", Status = "active", Active = true,
+                });
+            }
+
+            foreach (var client in session.ConnectedClients())
+            {
+                info.Clients.Add(new ClientConnection
+                {
+                    ProcessName = client.ProcessName,
+                    DisplayName = nicknames.Resolve(client.ProcessName),
+                    ConnectionId = client.ConnectionId,
+                    RigctldPort = client.RigctldPort,
                 });
             }
 

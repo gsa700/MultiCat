@@ -90,9 +90,9 @@
         </WrapPanel>
 
         <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="4">
-          <controls:SignalFlowControl Height="170"
+          <controls:SignalFlowControl x:Name="SignalFlow" Height="170"
                                       RadioName="{Binding Name}"
-                                      Ports="{Binding FlowPortLabels}" />
+                                      Clients="{Binding Clients}" />
         </Border>
 
         <DockPanel>

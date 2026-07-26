@@ -438,6 +438,29 @@ public sealed class RadioSession : IAsyncDisposable
         return port;
     }
 
+    /// <summary>One live client app connected to a rigctld port for this radio.</summary>
+    public readonly record struct ConnectedClient(string ProcessName, int Pid, int ConnectionId, int RigctldPort);
+
+    /// <summary>Enumerates the apps currently connected to this radio's rigctld
+    /// port(s), so the GUI can show a bubble per connection. Excludes our own poller.</summary>
+    public IReadOnlyList<ConnectedClient> ConnectedClients()
+    {
+        var self = Environment.ProcessId;
+        var clients = new List<ConnectedClient>();
+        foreach (var port in Options.ClientPorts)
+        {
+            if (port.RigctldPort is { } rp && _supervisors.ContainsKey(port.PortDisplay))
+            {
+                foreach (var (pid, proc, connId) in TcpConnections.ClientsOnLoopbackPort(rp, self))
+                {
+                    clients.Add(new ConnectedClient(proc, pid, connId, rp));
+                }
+            }
+        }
+
+        return clients;
+    }
+
     public void RegisterEndpoint(ClientPortEndpoint endpoint) => _endpoints[endpoint] = 0;
 
     public void UnregisterEndpoint(ClientPortEndpoint endpoint) => _endpoints.TryRemove(endpoint, out _);
