@@ -170,7 +170,19 @@ public class SignalFlowControl : Control
         var cy = bounds.Height / 2;
 
         var radioRect = new Rect(12, cy - 24, 118, 48);
-        var hubRect = new Rect((bounds.Width - 112) / 2, cy - 26, 112, 52);
+
+        // Center the hub on the whole window (not just this control, which sits right
+        // of the radios sidebar) — that shifts it toward the radio and leaves more room
+        // for client bubbles. Falls back to the control's own center.
+        var hubCenterX = bounds.Width / 2;
+        if (TopLevel.GetTopLevel(this) is { } top)
+        {
+            var origin = this.TranslatePoint(new Point(0, 0), top) ?? default;
+            hubCenterX = (top.ClientSize.Width / 2) - origin.X;
+        }
+
+        hubCenterX = Math.Clamp(hubCenterX, radioRect.Right + 80, bounds.Width - 66);
+        var hubRect = new Rect(hubCenterX - 56, cy - 26, 112, 52);
         var clientWidth = 140.0;
         var clientX = bounds.Width - clientWidth - 12;
 
