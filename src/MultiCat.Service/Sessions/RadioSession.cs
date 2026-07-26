@@ -102,6 +102,7 @@ public sealed class RadioSession : IAsyncDisposable
     private Core.Flex.FlexRadioState? _flexState;
     private Flex.FlexCommandServer? _flexServer;
     private Flex.FlexDiscoveryBroadcaster? _flexDiscovery;
+    private Flex.FlexPresenceSupervisor? _flexPresence;
 
     public RadioSession(RadioSessionOptions options, ILoggerFactory loggerFactory)
     {
@@ -407,16 +408,41 @@ public sealed class RadioSession : IAsyncDisposable
                 _flexState, flexPort, _loggerFactory.CreateLogger<Flex.FlexCommandServer>());
             _flexServer.Start();
 
-            _flexDiscovery = new Flex.FlexDiscoveryBroadcaster(
-                identity,
-                new Flex.FlexDiscoveryOptions
+            var discoveryOptions = new Flex.FlexDiscoveryOptions
+            {
+                BroadcastAddress = port.FlexBroadcastAddress ?? "255.255.255.255",
+                UnicastTargets = port.FlexTargets,
+            };
+
+            // Discovery is started by the supervisor rather than here: the stack
+            // should only ever see a radio that is actually answering.
+            _flexPresence = new Flex.FlexPresenceSupervisor(
+                isPresent: () => IsConnected,
+                goOnline: () =>
                 {
-                    BroadcastAddress = port.FlexBroadcastAddress ?? "255.255.255.255",
-                    UnicastTargets = port.FlexTargets,
+                    _flexServer!.Accepting = true;
+                    _flexDiscovery = new Flex.FlexDiscoveryBroadcaster(
+                        identity, discoveryOptions,
+                        _loggerFactory.CreateLogger<Flex.FlexDiscoveryBroadcaster>(),
+                        () => _flexServer?.ConnectedPeers() ?? []);
+                    _flexDiscovery.Start();
+                    return Task.CompletedTask;
                 },
-                _loggerFactory.CreateLogger<Flex.FlexDiscoveryBroadcaster>(),
-                () => _flexServer?.ConnectedPeers() ?? []);
-            _flexDiscovery.Start();
+                goOffline: async () =>
+                {
+                    // Stop advertising first, then drop the boxes, so none of them
+                    // reconnects to a radio that is on its way out.
+                    if (_flexDiscovery is not null)
+                    {
+                        await _flexDiscovery.DisposeAsync();
+                        _flexDiscovery = null;
+                    }
+
+                    _flexServer!.Accepting = false;
+                    _flexServer.DropAllClients();
+                },
+                _loggerFactory.CreateLogger<Flex.FlexPresenceSupervisor>());
+            _flexPresence.Start();
 
             // Seed the slice from what the radio has already told us, so a box that
             // connects before the next dial movement still sees the right band.
@@ -716,6 +742,11 @@ public sealed class RadioSession : IAsyncDisposable
 
         // Stop advertising first, then drop the boxes: they should see the radio go
         // away rather than keep a stale advert for something that no longer answers.
+        if (_flexPresence is not null)
+        {
+            await _flexPresence.DisposeAsync();
+        }
+
         if (_flexDiscovery is not null)
         {
             await _flexDiscovery.DisposeAsync();

@@ -38,6 +38,13 @@ public sealed class FlexCommandServer : IAsyncDisposable
     /// <summary>The port actually bound — useful when the caller asked for 0.</summary>
     public int BoundPort { get; private set; }
 
+    /// <summary>
+    /// Whether connections are served. Cleared while the radio is absent: a box that
+    /// remembers the address would otherwise reconnect and sit on a radio that has
+    /// nothing to report, instead of falling back to its no-transceiver antenna.
+    /// </summary>
+    public bool Accepting { get; set; } = true;
+
     public int ClientCount
     {
         get
@@ -75,6 +82,13 @@ public sealed class FlexCommandServer : IAsyncDisposable
             while (!ct.IsCancellationRequested)
             {
                 var tcp = await _listener!.AcceptTcpClientAsync(ct);
+                if (!Accepting)
+                {
+                    tcp.Close();
+                    tcp.Dispose();
+                    continue;
+                }
+
                 _ = Task.Run(() => ServeAsync(tcp, ct), CancellationToken.None);
             }
         }
