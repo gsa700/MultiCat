@@ -50,8 +50,9 @@ WHAT'S IN THIS FOLDER
 
 
 KNOWN LIMITS IN THIS PRE-ALPHA
-  - Supervised real rigctld is verified with network radios (e.g. Elecraft
-    K4/K4D). Serial radios aren't wired for it yet — use a network rig for now.
+  - Supervised real rigctld drives both network radios (e.g. Elecraft K4/K4D
+    over Ethernet) and serial radios (rigctld owns the COM port). Both verified
+    on real hardware.
   - Real virtual COM ports (for apps like N1MM+ that only speak serial) need a
     signed com0com/VSP driver, which current Windows 11 builds reject. The
     network endpoints above are the recommended path and need no driver.
