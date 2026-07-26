@@ -66,7 +66,8 @@ public sealed record ClientPortOptions
 /// internal status poller that keeps the event stream fed even with no clients polling.</summary>
 public sealed class RadioSession : IAsyncDisposable
 {
-    private readonly ICatTransport _transport;
+    private readonly ICatTransport? _transport;
+    private readonly TransactionArbiter? _arbiter;
     private readonly RadioStateTracker _tracker = new();
     private readonly List<Task> _loops = [];
     private readonly CancellationTokenSource _cts = new();
@@ -77,11 +78,21 @@ public sealed class RadioSession : IAsyncDisposable
     private readonly List<ClientPortEndpoint> _ownedEndpoints = [];
     private readonly Dictionary<string, string> _portStatus = [];
     private readonly ILoggerFactory _loggerFactory;
+    private RigctldClientPoller? _poller;
 
     public RadioSession(RadioSessionOptions options, ILoggerFactory loggerFactory)
     {
         Options = options;
         _loggerFactory = loggerFactory;
+
+        // Serial sole-owner mode: a serial radio with a rigctld port lets rigctld own
+        // the COM port (it can only be opened once). MultiCAT opens no CAT connection
+        // of its own; the GUI feed comes from a rigctld client poller (see Start).
+        if (IsSoleOwnerRigctld)
+        {
+            return;
+        }
+
         _transport = options switch
         {
             { Simulator: true } => new SimulatedKenwoodTransport(),
@@ -103,12 +114,12 @@ public sealed class RadioSession : IAsyncDisposable
 
         // CI-V support exists in Core; sessions are Kenwood-family until the
         // config UI can express per-protocol defaults.
-        Arbiter = new TransactionArbiter(
+        _arbiter = new TransactionArbiter(
             _transport, new KenwoodFramer(), new KenwoodRules(),
             new PollCache(TimeProvider.System, TimeSpan.FromMilliseconds(300)),
             TimeProvider.System);
 
-        Arbiter.UnsolicitedReceived += frame =>
+        _arbiter.UnsolicitedReceived += frame =>
         {
             foreach (var endpoint in _endpoints.Keys)
             {
@@ -116,7 +127,7 @@ public sealed class RadioSession : IAsyncDisposable
             }
         };
 
-        Arbiter.Activity += activity =>
+        _arbiter.Activity += activity =>
         {
             long frequency = 0;
             var mode = string.Empty;
@@ -147,24 +158,35 @@ public sealed class RadioSession : IAsyncDisposable
         };
     }
 
-    public bool IsTransmitting => _tracker.Transmitting == true;
+    /// <summary>A serial radio with a rigctld port: rigctld owns the port, we don't.</summary>
+    public bool IsSoleOwnerRigctld =>
+        !Options.Simulator && !Options.IsNetwork && Options.ClientPorts.Any(p => p.RigctldPort is not null);
+
+    public bool IsTransmitting =>
+        IsSoleOwnerRigctld ? _poller?.Transmitting == true : _tracker.Transmitting == true;
 
     public RadioSessionOptions Options { get; }
 
-    public TransactionArbiter Arbiter { get; }
+    /// <summary>The arbiter that owns the radio. Absent in sole-owner mode, where
+    /// rigctld owns it — arbiter-based endpoints aren't created there.</summary>
+    public TransactionArbiter Arbiter =>
+        _arbiter ?? throw new InvalidOperationException($"Radio '{Options.Name}' has no arbiter (rigctld owns the port)");
 
     private bool _started;
 
-    public bool IsConnected => _transport switch
-    {
-        NetworkCatTransport network => network.IsConnected,
-        _ => _started,
-    };
+    public bool IsConnected => IsSoleOwnerRigctld
+        ? _poller?.Connected == true
+        : _transport switch
+        {
+            NetworkCatTransport network => network.IsConnected,
+            _ => _started,
+        };
 
     public string ConnectionSummary => Options switch
     {
         { Simulator: true } => "simulator · connected",
         { IsNetwork: true } => $"{Options.Host}:{Options.TcpPort ?? 9200} · {(IsConnected ? "connected" : "connecting…")}",
+        _ when IsSoleOwnerRigctld => $"{Options.ComPort} · {(IsConnected ? "rigctld" : "starting rigctld…")}",
         _ => $"{Options.ComPort} · {(IsConnected ? "connected" : "idle")}",
     };
 
@@ -172,6 +194,18 @@ public sealed class RadioSession : IAsyncDisposable
     {
         get
         {
+            if (IsSoleOwnerRigctld)
+            {
+                if (_poller is not { Connected: true })
+                {
+                    return "starting rigctld…";
+                }
+
+                var f = _poller.FrequencyHz is { } phz ? $" · {phz / 1000.0:N2} kHz" : string.Empty;
+                var md = _poller.Mode is { } pm ? $" · {pm}" : string.Empty;
+                return $"connected{f}{md}";
+            }
+
             if (!IsConnected)
             {
                 return "idle";
@@ -187,6 +221,12 @@ public sealed class RadioSession : IAsyncDisposable
 
     public void Start()
     {
+        if (IsSoleOwnerRigctld)
+        {
+            StartSoleOwner();
+            return;
+        }
+
         switch (_transport)
         {
             case SerialPortTransport serial:
@@ -218,6 +258,41 @@ public sealed class RadioSession : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Serial sole-owner: rigctld owns the COM port; MultiCAT launches it and then
+    /// reads freq/mode/PTT back from it as a client to keep the GUI live. Only the
+    /// first rigctld port is served — a serial port can't be shared by two rigctld.
+    /// </summary>
+    private void StartSoleOwner()
+    {
+        var rigctldPort = Options.ClientPorts.First(p => p.RigctldPort is not null);
+        StartRigctldPort(rigctldPort, rigctldPort.RigctldPort!.Value);
+
+        _poller = new RigctldClientPoller(
+            rigctldPort.RigctldPort.Value, TimeSpan.FromMilliseconds(500),
+            _loggerFactory.CreateLogger<RigctldClientPoller>());
+        _poller.FrequencyChanged += hz => RaisePollActivity($"f {hz / 1000.0:N2} kHz", frequency: hz);
+        _poller.ModeChanged += m => RaisePollActivity($"m {m}", mode: m);
+        _poller.TransmitChanged += tx => RaisePollActivity(tx ? "TX" : "RX", ptt: tx ? "tx" : "rx");
+        _poller.Start();
+
+        foreach (var port in Options.ClientPorts)
+        {
+            if (!_portStatus.ContainsKey(port.PortDisplay))
+            {
+                _portStatus[port.PortDisplay] = "unavailable — rigctld owns the serial port";
+            }
+        }
+    }
+
+    // Surfaces a rigctld poll result as an activity event so the GUI status line,
+    // traffic monitor, and PTT indicator update in sole-owner mode.
+    private void RaisePollActivity(string display, long frequency = 0, string mode = "", string ptt = "")
+    {
+        var activity = new ArbiterActivity("rigctld", ArbiterActivityKind.ResponseReceived, CatFrame.FromAscii(display));
+        ActivityObserved?.Invoke(this, activity, frequency, mode, ptt);
+    }
+
     /// <summary>Arms Kenwood auto-information (AI2) so the radio pushes state changes,
     /// then does one full read. Sets are no-reply; the reads feed the state tracker.</summary>
     private async Task ArmPushModeAsync()
@@ -240,6 +315,14 @@ public sealed class RadioSession : IAsyncDisposable
 
     private void StartClientPort(ClientPortOptions port)
     {
+        // In sole-owner mode rigctld holds the radio, so there's no arbiter to back
+        // com0com/raw-TCP endpoints. Only the rigctld port (started separately) works.
+        if (_arbiter is null && port.RigctldPort is null)
+        {
+            _portStatus[port.PortDisplay] = "unavailable — rigctld owns the serial port";
+            return;
+        }
+
         if (port.MuxPort is { } muxPort)
         {
             try
@@ -444,6 +527,11 @@ public sealed class RadioSession : IAsyncDisposable
             await endpoint.DisposeAsync();
         }
 
+        if (_poller is not null)
+        {
+            await _poller.DisposeAsync();
+        }
+
         try
         {
             await Task.WhenAll(_loops);
@@ -452,8 +540,16 @@ public sealed class RadioSession : IAsyncDisposable
         {
         }
 
-        await Arbiter.DisposeAsync();
-        await _transport.DisposeAsync();
+        if (_arbiter is not null)
+        {
+            await _arbiter.DisposeAsync();
+        }
+
+        if (_transport is not null)
+        {
+            await _transport.DisposeAsync();
+        }
+
         _cts.Dispose();
     }
 }
