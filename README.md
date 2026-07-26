@@ -2,7 +2,9 @@
 
 *One radio, many owners.*
 
-![MultiCAT sharing one radio with several apps — live signal flow and traffic monitor](docs/multicat.gif)
+![MultiCAT sharing one Elecraft K4 with WSJT-X, Log4OM, and an LP-100A monitor — live client bubbles, per-app attributed CAT traffic, and activity LED](docs/multicat-live.gif)
+
+*Live: three apps sharing one K4 through real hamlib — every command attributed to the app that sent it.*
 
 MultiCAT is a graphical CAT multiplexer for Windows: it takes exclusive ownership of a
 radio's CAT port, then shares that radio with as many applications as you like — each
