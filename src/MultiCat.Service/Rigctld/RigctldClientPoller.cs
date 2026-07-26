@@ -15,6 +15,16 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
 
     public long? FrequencyHz { get; private set; }
 
+    /// <summary>True when the radio transmits on a different VFO than it receives on.</summary>
+    public bool Split { get; private set; }
+
+    /// <summary>
+    /// The frequency about to be transmitted on. Band-following gear must use this:
+    /// during a split QSO it differs from the receive frequency, and following the
+    /// receive VFO would select the wrong band.
+    /// </summary>
+    public long? TransmitFrequencyHz { get; private set; }
+
     public string? Mode { get; private set; }
 
     public bool? Transmitting { get; private set; }
@@ -22,6 +32,8 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
     public bool Connected { get; private set; }
 
     public event Action<long>? FrequencyChanged;
+
+    public event Action<long>? TransmitFrequencyChanged;
 
     public event Action<string>? ModeChanged;
 
@@ -89,6 +101,32 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
         {
             Mode = modeLine;
             ModeChanged?.Invoke(modeLine);
+        }
+
+        // get_split_vfo -> split flag + transmit VFO. Both replies are fixed-length,
+        // which keeps this request/response socket in step.
+        await writer.WriteAsync("s\n");
+        var splitLine = await reader.ReadLineAsync(ct);
+        _ = await reader.ReadLineAsync(ct);
+        Split = splitLine == "1";
+
+        var transmitFrequency = FrequencyHz;
+        if (Split)
+        {
+            // get_split_freq is the transmit frequency, and is meaningful only while
+            // split is on — it answers 0 on a simplex radio.
+            await writer.WriteAsync("i\n");
+            var splitFreq = await reader.ReadLineAsync(ct);
+            if (long.TryParse(splitFreq, out var txHz) && txHz > 0)
+            {
+                transmitFrequency = txHz;
+            }
+        }
+
+        if (transmitFrequency is { } txHertz && txHertz != TransmitFrequencyHz)
+        {
+            TransmitFrequencyHz = txHertz;
+            TransmitFrequencyChanged?.Invoke(txHertz);
         }
 
         // get_ptt -> "0" or "1"

@@ -15,7 +15,22 @@ public sealed class RadioStateTracker
         ['5'] = "AM", ['6'] = "DATA", ['7'] = "CW-R", ['9'] = "DATA-R",
     };
 
+    /// <summary>VFO A — what the operator is listening on.</summary>
     public long? FrequencyHz { get; private set; }
+
+    /// <summary>VFO B, which becomes the transmit frequency while split is on.</summary>
+    public long? VfoBHz { get; private set; }
+
+    /// <summary>True when the radio transmits on VFO B rather than VFO A.</summary>
+    public bool Split { get; private set; }
+
+    /// <summary>
+    /// The frequency about to be transmitted on. Anything that follows the radio to
+    /// select a band — an amplifier, tuner or antenna switch — must use this rather
+    /// than <see cref="FrequencyHz"/>: during a split QSO those differ, and choosing
+    /// the receive VFO would band-select for the wrong one.
+    /// </summary>
+    public long? TransmitFrequencyHz => Split ? VfoBHz ?? FrequencyHz : FrequencyHz;
 
     public string? Mode { get; private set; }
 
@@ -24,9 +39,27 @@ public sealed class RadioStateTracker
 
     public event Action<long>? FrequencyChanged;
 
+    /// <summary>Raised when the transmit frequency changes — whether because the dial
+    /// moved, VFO B moved, or split was switched.</summary>
+    public event Action<long>? TransmitFrequencyChanged;
+
     public event Action<string>? ModeChanged;
 
     public event Action<bool>? TransmitChanged;
+
+    public event Action<bool>? SplitChanged;
+
+    private long? _lastTransmitFrequency;
+
+    /// <summary>Raises the transmit-frequency event if the effective value moved.</summary>
+    private void NotifyTransmitFrequency()
+    {
+        if (TransmitFrequencyHz is { } tx && tx != _lastTransmitFrequency)
+        {
+            _lastTransmitFrequency = tx;
+            TransmitFrequencyChanged?.Invoke(tx);
+        }
+    }
 
     public void Observe(CatFrame frame)
     {
@@ -49,13 +82,35 @@ public sealed class RadioStateTracker
             return;
         }
 
+        // Split / transmit-VFO select: FT0; transmits on VFO A, FT1; on VFO B.
+        if (text.StartsWith("FT") && text.Length == 4 && text[2] is '0' or '1')
+        {
+            var split = text[2] == '1';
+            if (split != Split)
+            {
+                Split = split;
+                SplitChanged?.Invoke(split);
+                NotifyTransmitFrequency();
+            }
+
+            return;
+        }
+
         if ((text.StartsWith("FA") || text.StartsWith("FB")) && text.Length == 14)
         {
-            if (long.TryParse(text.AsSpan(2, 11), NumberStyles.None, CultureInfo.InvariantCulture, out var hz)
-                && text.StartsWith("FA") && hz != FrequencyHz)
+            if (long.TryParse(text.AsSpan(2, 11), NumberStyles.None, CultureInfo.InvariantCulture, out var hz))
             {
-                FrequencyHz = hz;
-                FrequencyChanged?.Invoke(hz);
+                if (text.StartsWith("FA") && hz != FrequencyHz)
+                {
+                    FrequencyHz = hz;
+                    FrequencyChanged?.Invoke(hz);
+                    NotifyTransmitFrequency();
+                }
+                else if (text.StartsWith("FB") && hz != VfoBHz)
+                {
+                    VfoBHz = hz;
+                    NotifyTransmitFrequency();
+                }
             }
         }
         else if (text.StartsWith("MD") && text.Length == 4 && Modes.TryGetValue(text[2], out var mode))

@@ -194,11 +194,17 @@ public sealed class RadioSession : IAsyncDisposable
             return;
         }
 
-        if (frequencyHz > 0 || mode.Length > 0)
+        // Band-following gear must track the TRANSMIT frequency, which in split is
+        // VFO B, not what the operator is listening on. Following the receive VFO
+        // would band-select the amplifier, tuner and switch for the wrong band.
+        var transmitHz = IsSoleOwnerRigctld ? _poller?.TransmitFrequencyHz : _tracker.TransmitFrequencyHz;
+        var effectiveHz = transmitHz ?? (frequencyHz > 0 ? frequencyHz : null);
+
+        if (effectiveHz is not null || mode.Length > 0)
         {
             _flexState.UpdateSlice(
                 0,
-                frequencyHz: frequencyHz > 0 ? frequencyHz : null,
+                frequencyHz: effectiveHz,
                 mode: mode.Length > 0 ? mode : null);
             _flexState.EmitPending();
         }
@@ -366,6 +372,10 @@ public sealed class RadioSession : IAsyncDisposable
         {
             await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("AI2;"), _cts.Token);
             await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("FA;"), _cts.Token);
+            // VFO B and the transmit-VFO select, so split is known from the start
+            // rather than only after the operator next touches it.
+            await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("FB;"), _cts.Token);
+            await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("FT;"), _cts.Token);
             await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("MD;"), _cts.Token);
         }
         catch (OperationCanceledException)
