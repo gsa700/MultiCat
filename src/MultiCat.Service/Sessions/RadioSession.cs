@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using MultiCat.Core;
 using MultiCat.Core.Framing;
 using MultiCat.Core.Protocol;
+using MultiCat.Hamlib;
+using MultiCat.Service.Rigctld;
 using MultiCat.Service.Transports;
 
 namespace MultiCat.Service.Sessions;
@@ -11,6 +13,10 @@ public sealed record RadioSessionOptions
     public required string Name { get; init; }
 
     public string Protocol { get; init; } = "Kenwood";
+
+    /// <summary>Hamlib rig model id (e.g. 2047 = Elecraft K4); 0 if not chosen. Used to
+    /// launch a real rigctld. When 0, resolved by name from the rig database.</summary>
+    public int HamlibModel { get; init; }
 
     /// <summary>When true, runs against the built-in simulated K3 instead of hardware.</summary>
     public bool Simulator { get; init; }
@@ -67,12 +73,15 @@ public sealed class RadioSession : IAsyncDisposable
     private readonly ConcurrentDictionary<ClientPortEndpoint, byte> _endpoints = new();
     private readonly List<TcpRawListener> _listeners = [];
     private readonly Dictionary<string, RigctldListener> _rigctldListeners = [];
+    private readonly Dictionary<string, RigctldSupervisor> _supervisors = [];
     private readonly List<ClientPortEndpoint> _ownedEndpoints = [];
     private readonly Dictionary<string, string> _portStatus = [];
+    private readonly ILoggerFactory _loggerFactory;
 
-    public RadioSession(RadioSessionOptions options)
+    public RadioSession(RadioSessionOptions options, ILoggerFactory loggerFactory)
     {
         Options = options;
+        _loggerFactory = loggerFactory;
         _transport = options switch
         {
             { Simulator: true } => new SimulatedKenwoodTransport(),
@@ -261,19 +270,60 @@ public sealed class RadioSession : IAsyncDisposable
         }
         else if (port.RigctldPort is { } rigctldPort)
         {
-            try
-            {
-                _rigctldListeners[port.PortDisplay] = new RigctldListener(port.Label, rigctldPort, this);
-                _portStatus[port.PortDisplay] = $"rigctld on localhost:{rigctldPort}";
-            }
-            catch (Exception ex)
-            {
-                _portStatus[port.PortDisplay] = $"failed: {ex.Message}";
-            }
+            StartRigctldPort(port, rigctldPort);
         }
         else
         {
             _portStatus[port.PortDisplay] = "not configured";
+        }
+    }
+
+    /// <summary>
+    /// A rigctld port on a real radio is served by a supervised, bundled hamlib
+    /// rigctld (the reference implementation — broad client compatibility). The
+    /// simulator can't be driven by rigctld, so it falls back to the built-in
+    /// emulation. rigctld opens its own CAT connection to the radio, alongside the
+    /// arbiter's, which the K4's network server allows.
+    /// </summary>
+    private void StartRigctldPort(ClientPortOptions port, int rigctldPort)
+    {
+        if (Options.Simulator)
+        {
+            _rigctldListeners[port.PortDisplay] = new RigctldListener(port.Label, rigctldPort, this);
+            _portStatus[port.PortDisplay] = $"rigctld (emulated) on localhost:{rigctldPort}";
+            return;
+        }
+
+        var model = Options.HamlibModel > 0
+            ? Options.HamlibModel
+            : RigDatabase.FindByName(Options.Name)?.Id ?? 0;
+        if (model == 0)
+        {
+            _portStatus[port.PortDisplay] = "no hamlib model — pick a rig in the editor";
+            return;
+        }
+
+        var exe = Path.Combine(AppContext.BaseDirectory, "hamlib", "rigctld.exe");
+        var device = Options.IsNetwork ? $"{Options.Host}:{Options.TcpPort ?? 9200}" : Options.ComPort ?? "";
+        try
+        {
+            var supervisor = new RigctldSupervisor(
+                new RigctldOptions
+                {
+                    ExePath = exe,
+                    HamlibModel = model,
+                    Device = device,
+                    BaudRate = Options.IsNetwork ? null : Options.BaudRate,
+                    ListenPort = rigctldPort,
+                },
+                _loggerFactory.CreateLogger<RigctldSupervisor>());
+            supervisor.Start();
+            _supervisors[port.PortDisplay] = supervisor;
+            _portStatus[port.PortDisplay] = $"real rigctld on localhost:{rigctldPort} (hamlib model {model})";
+        }
+        catch (Exception ex)
+        {
+            _portStatus[port.PortDisplay] = $"rigctld failed: {ex.Message}";
         }
     }
 
@@ -316,7 +366,8 @@ public sealed class RadioSession : IAsyncDisposable
             return ("unknown", false);
         }
 
-        var active = status.StartsWith("active") || status.StartsWith("listening") || status.StartsWith("rigctld");
+        var active = status.StartsWith("active") || status.StartsWith("listening") ||
+                     status.StartsWith("rigctld") || status.StartsWith("real rigctld");
         if (port.TcpPort is not null && active)
         {
             var count = _listeners.Sum(l => l.ConnectionCount);
@@ -381,6 +432,11 @@ public sealed class RadioSession : IAsyncDisposable
         foreach (var listener in _rigctldListeners.Values)
         {
             await listener.DisposeAsync();
+        }
+
+        foreach (var supervisor in _supervisors.Values)
+        {
+            await supervisor.DisposeAsync();
         }
 
         foreach (var endpoint in _ownedEndpoints)

@@ -175,6 +175,7 @@ public sealed class ControlService(
             BaudRate = options.BaudRate,
             Host = options.Host ?? string.Empty,
             TcpPort = options.TcpPort ?? 0,
+            HamlibModelId = options.HamlibModel,
         };
 
         foreach (var port in options.ClientPorts)
@@ -204,6 +205,7 @@ public sealed class ControlService(
         BaudRate = config.BaudRate == 0 ? 38400 : config.BaudRate,
         Host = string.IsNullOrEmpty(config.Host) ? null : config.Host,
         TcpPort = config.TcpPort == 0 ? null : config.TcpPort,
+        HamlibModel = config.HamlibModelId,
         ClientPorts = [.. config.ClientPorts.Select(p => new ClientPortOptions
         {
             PortDisplay = p.PortDisplay,

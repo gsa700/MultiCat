@@ -13,15 +13,17 @@ namespace MultiCat.Service.Sessions;
 public sealed class SessionManager : IHostedService, IAsyncDisposable
 {
     private readonly ILogger<SessionManager> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly RadioConfigStore _store;
     private readonly OmniRig.OmniRigCoordinator _omnirig;
     private readonly List<RadioSession> _sessions = [];
     private readonly ConcurrentDictionary<Guid, Channel<ActivityEvent>> _subscribers = new();
     private readonly SemaphoreSlim _mutation = new(1, 1);
 
-    public SessionManager(ILogger<SessionManager> logger, IHostEnvironment environment, OmniRig.OmniRigCoordinator omnirig)
+    public SessionManager(ILogger<SessionManager> logger, ILoggerFactory loggerFactory, IHostEnvironment environment, OmniRig.OmniRigCoordinator omnirig)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _omnirig = omnirig;
         _store = new RadioConfigStore(Path.Combine(environment.ContentRootPath, "appsettings.json"));
     }
@@ -61,7 +63,7 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
     {
         try
         {
-            var session = new RadioSession(config);
+            var session = new RadioSession(config, _loggerFactory);
             session.ActivityObserved += OnActivity;
             session.Start();
             _sessions.Add(session);

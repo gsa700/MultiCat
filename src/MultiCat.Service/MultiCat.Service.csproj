@@ -17,4 +17,9 @@
     <ProjectReference Include="..\MultiCat.Hamlib\MultiCat.Hamlib.csproj" />
     <ProjectReference Include="..\MultiCat.Contracts\MultiCat.Contracts.csproj" />
   </ItemGroup>
+
+  <!-- Bundled Hamlib (LGPL) — supervised rigctld drives radios with real hamlib. -->
+  <ItemGroup>
+    <Content Include="hamlib\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
