@@ -140,7 +140,15 @@
                     Content="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureLabel}"
                     Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleCaptureCommand}" />
           </StackPanel>
-          <TextBlock Text="Traffic monitor" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+            <controls:ActivityLed VerticalAlignment="Center"
+                                  LastActivity="{Binding LastActivityAt}"
+                                  IsConnected="{Binding IsConnected}"
+                                  ToolTip.Tip="CAT activity — flashes on traffic, steady when connected and quiet" />
+            <TextBlock Text="Traffic monitor" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding QuietNote}" FontSize="11" Foreground="#8E8E8E" VerticalAlignment="Center"
+                       IsVisible="{Binding QuietNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
         </DockPanel>
         <TextBlock Text="{Binding $parent[Window].((vm:MainViewModel)DataContext).CaptureStatus}"
                    FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap"

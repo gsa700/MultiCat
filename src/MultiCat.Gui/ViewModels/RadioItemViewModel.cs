@@ -9,13 +9,23 @@ public partial class RadioItemViewModel : ViewModelBase
 
     public required string ConnectionSummary { get; init; }
 
-    public bool IsConnected { get; init; }
+    [ObservableProperty]
+    public partial bool IsConnected { get; set; }
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = "idle";
 
     [ObservableProperty]
     public partial bool IsTransmitting { get; set; }
+
+    /// <summary>When the last activity event arrived — drives the CAT LED flash.</summary>
+    [ObservableProperty]
+    public partial DateTime? LastActivityAt { get; set; }
+
+    /// <summary>"quiet · last traffic …" note shown in the monitor when idle; empty
+    /// while traffic is flowing. Updated by the main view model's status timer.</summary>
+    [ObservableProperty]
+    public partial string QuietNote { get; set; } = string.Empty;
 
     /// <summary>Raised per real activity event to pulse the signal-flow diagram.
     /// link 0 = radio↔hub, link N = the Nth client port; towardRadio picks direction

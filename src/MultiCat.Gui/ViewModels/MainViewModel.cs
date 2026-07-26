@@ -292,13 +292,37 @@ public partial class MainViewModel : ViewModelBase
                     }
                 }
 
+                radio.IsConnected = info.Connected;
                 ReconcileClients(radio, info.Clients);
+                UpdateQuietNote(radio);
             }
         }
         catch (Exception)
         {
             // Transient; the next tick tries again.
         }
+    }
+
+    // "quiet · last traffic …" when nothing has flowed for a while — so a silent
+    // monitor reads as healthy-but-quiet instead of dead. Cleared on any event.
+    private static void UpdateQuietNote(RadioItemViewModel radio)
+    {
+        if (!radio.IsConnected)
+        {
+            radio.QuietNote = string.Empty;
+            return;
+        }
+
+        if (radio.LastActivityAt is not { } last)
+        {
+            radio.QuietNote = "quiet · no traffic yet";
+            return;
+        }
+
+        var idle = DateTime.Now - last;
+        radio.QuietNote = idle.TotalSeconds < 10
+            ? string.Empty
+            : $"quiet · last traffic {last:HH:mm:ss} ({(idle.TotalSeconds < 120 ? $"{(int)idle.TotalSeconds} s" : $"{(int)idle.TotalMinutes} min")} ago)";
     }
 
     // Bring a radio's live client bubbles in line with the service without rebuilding
@@ -437,6 +461,9 @@ public partial class MainViewModel : ViewModelBase
         {
             return;
         }
+
+        radio.LastActivityAt = DateTime.Now;
+        radio.QuietNote = string.Empty;
 
         // Relayed rigctld traffic: a client's command flows client → hub → radio;
         // rigctld's reply pulses hub → client. Commands get a traffic line with the
