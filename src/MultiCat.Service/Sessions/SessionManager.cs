@@ -193,6 +193,10 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
             FrequencyHz = frequencyHz,
             Mode = mode,
             Ptt = ptt,
+            VfoAHz = session.VfoAHz,
+            VfoBHz = session.VfoBHz,
+            Split = session.Split,
+            TxOnVfoB = session.TransmitOnVfoB,
         };
 
         foreach (var channel in _subscribers.Values)

@@ -223,6 +223,23 @@ public sealed class RadioSession : IAsyncDisposable
     public bool IsTransmitting =>
         IsSoleOwnerRigctld ? _poller?.Transmitting == true : _tracker.Transmitting == true;
 
+    /// <summary>The receive VFO's frequency.</summary>
+    public long VfoAHz => (IsSoleOwnerRigctld ? _poller?.FrequencyHz : _tracker.FrequencyHz) ?? 0;
+
+    /// <summary>
+    /// VFO B's frequency, or 0 when unknown. Via rigctld only the split transmit
+    /// frequency is available, so VFO B is known only while split is on — reading
+    /// its dial otherwise needs a variable-length reply this client doesn't do.
+    /// </summary>
+    public long VfoBHz => IsSoleOwnerRigctld
+        ? (_poller?.Split == true ? _poller.TransmitFrequencyHz ?? 0 : 0)
+        : _tracker.VfoBHz ?? 0;
+
+    public bool Split => IsSoleOwnerRigctld ? _poller?.Split == true : _tracker.Split;
+
+    /// <summary>Which VFO the radio will transmit on — what the arrow points at.</summary>
+    public bool TransmitOnVfoB => Split;
+
     public RadioSessionOptions Options { get; }
 
     /// <summary>The arbiter that owns the radio. Absent in sole-owner mode, where

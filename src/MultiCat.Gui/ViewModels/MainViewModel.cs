@@ -299,6 +299,10 @@ public partial class MainViewModel : ViewModelBase
                 // event to correct these, which used to leave a stale "connecting…".
                 radio.ConnectionSummary = info.ConnectionSummary;
                 radio.StatusText = info.StatusText;
+                radio.VfoAHz = info.VfoAHz;
+                radio.VfoBHz = info.VfoBHz;
+                radio.Split = info.Split;
+                radio.TransmitOnVfoB = info.TxOnVfoB;
 
                 ReconcileClients(radio, info.Clients);
                 UpdateQuietNote(radio);
@@ -530,6 +534,17 @@ public partial class MainViewModel : ViewModelBase
             radio.IsTransmitting = evt.Ptt == "tx";
         }
 
+        // Every event carries the VFO picture, so the display follows the radio
+        // rather than waiting on the slow status refresh.
+        if (evt.VfoAHz > 0)
+        {
+            radio.VfoAHz = evt.VfoAHz;
+        }
+
+        radio.VfoBHz = evt.VfoBHz;
+        radio.Split = evt.Split;
+        radio.TransmitOnVfoB = evt.TxOnVfoB;
+
         if (evt.FrequencyHz > 0 || evt.Mode.Length > 0)
         {
             var freq = radio.LastFrequencyHz is { } hz ? $" · {hz / 1000.0:N2} kHz" : string.Empty;
@@ -569,6 +584,10 @@ public partial class MainViewModel : ViewModelBase
             IsConnected = radio.Connected,
             StatusText = radio.StatusText,
             IsTransmitting = radio.Transmitting,
+            VfoAHz = radio.VfoAHz,
+            VfoBHz = radio.VfoBHz,
+            Split = radio.Split,
+            TransmitOnVfoB = radio.TxOnVfoB,
             Protocol = radio.Protocol,
             Connection = radio.Connection,
             ComPort = radio.ComPort,

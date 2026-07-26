@@ -62,6 +62,40 @@
           </StackPanel>
         </DockPanel>
 
+        <!-- VFO panel, laid out the way the radio's own display reads: the two VFOs
+             with an arrow lit on the side that will transmit, and SPLIT called out. -->
+        <Border Background="#12808080" CornerRadius="8" Padding="16,10" HorizontalAlignment="Left">
+          <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+            <StackPanel Spacing="1">
+              <TextBlock Text="VFO A" FontSize="10" Foreground="#8E8E8E" />
+              <TextBlock Text="{Binding VfoAText}" FontSize="20" FontFamily="Cascadia Mono,Consolas"
+                         Opacity="{Binding VfoAIsTransmit, Converter={x:Static vm:Converters.VfoOpacity}}" />
+            </StackPanel>
+            <TextBlock Text="kHz" FontSize="10" Foreground="#8E8E8E" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <TextBlock Text="{Binding TransmitArrowLeft}" FontSize="15"
+                         Foreground="{Binding VfoAIsTransmit, Converter={x:Static vm:Converters.ArrowBrush}}" />
+              <TextBlock Text="TX" FontSize="11" FontWeight="Medium" Foreground="#8E8E8E" />
+              <TextBlock Text="{Binding TransmitArrowRight}" FontSize="15"
+                         Foreground="{Binding VfoBIsTransmit, Converter={x:Static vm:Converters.ArrowBrush}}" />
+            </StackPanel>
+
+            <StackPanel Spacing="1" IsVisible="{Binding ShowVfoB}">
+              <TextBlock Text="VFO B" FontSize="10" Foreground="#8E8E8E" />
+              <TextBlock Text="{Binding VfoBText}" FontSize="20" FontFamily="Cascadia Mono,Consolas"
+                         Opacity="{Binding VfoBIsTransmit, Converter={x:Static vm:Converters.VfoOpacity}}" />
+            </StackPanel>
+            <TextBlock Text="kHz" FontSize="10" Foreground="#8E8E8E" VerticalAlignment="Bottom"
+                       Margin="0,0,0,4" IsVisible="{Binding ShowVfoB}" />
+
+            <Border Background="#E8A33D" CornerRadius="4" Padding="7,2" VerticalAlignment="Center"
+                    IsVisible="{Binding Split}">
+              <TextBlock Text="SPLIT" FontSize="11" FontWeight="Medium" Foreground="#3A2A08" />
+            </Border>
+          </StackPanel>
+        </Border>
+
         <WrapPanel Orientation="Horizontal">
           <StackPanel Margin="0,0,32,0" Spacing="2">
             <TextBlock Text="Rig" FontSize="11" Foreground="#8E8E8E" />

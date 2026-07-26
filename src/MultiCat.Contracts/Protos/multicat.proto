@@ -79,6 +79,11 @@ message RadioInfo {
   string host = 11;
   int32 tcp_port = 12;
   repeated ClientConnection clients = 13;   // apps currently connected to this radio
+  // Both VFOs and which one transmits, as a radio's own display shows them.
+  int64 vfo_a_hz = 14;
+  int64 vfo_b_hz = 15;          // 0 when unknown
+  bool split = 16;
+  bool tx_on_vfo_b = 17;        // which VFO the arrow points at
 }
 
 message ClientPortInfo {
@@ -151,4 +156,10 @@ message ActivityEvent {
   int64 frequency_hz = 7;   // 0 when unchanged
   string mode = 8;          // empty when unchanged
   string ptt = 9;           // "tx", "rx", or empty when unchanged
+  // Current VFO picture, carried on every event so the display tracks live
+  // rather than waiting for the slow status refresh.
+  int64 vfo_a_hz = 10;
+  int64 vfo_b_hz = 11;
+  bool split = 12;
+  bool tx_on_vfo_b = 13;
 }
