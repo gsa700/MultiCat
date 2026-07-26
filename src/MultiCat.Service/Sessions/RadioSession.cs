@@ -75,6 +75,8 @@ public sealed class RadioSession : IAsyncDisposable
     private readonly List<TcpRawListener> _listeners = [];
     private readonly Dictionary<string, RigctldListener> _rigctldListeners = [];
     private readonly Dictionary<string, RigctldSupervisor> _supervisors = [];
+    private readonly Dictionary<string, RigctldRelay> _relays = [];
+    private int _internalRigctldPort;
     private readonly List<ClientPortEndpoint> _ownedEndpoints = [];
     private readonly Dictionary<string, string> _portStatus = [];
     private readonly ILoggerFactory _loggerFactory;
@@ -268,8 +270,11 @@ public sealed class RadioSession : IAsyncDisposable
         var rigctldPort = Options.ClientPorts.First(p => p.RigctldPort is not null);
         StartRigctldPort(rigctldPort, rigctldPort.RigctldPort!.Value);
 
+        // Poll rigctld's internal port directly so our own poller never shows up as a
+        // client connection or as relay traffic.
         _poller = new RigctldClientPoller(
-            rigctldPort.RigctldPort.Value, TimeSpan.FromMilliseconds(500),
+            _internalRigctldPort > 0 ? _internalRigctldPort : rigctldPort.RigctldPort.Value,
+            TimeSpan.FromMilliseconds(500),
             _loggerFactory.CreateLogger<RigctldClientPoller>());
         _poller.FrequencyChanged += hz => RaisePollActivity($"f {hz / 1000.0:N2} kHz", frequency: hz);
         _poller.ModeChanged += m => RaisePollActivity($"m {m}", mode: m);
@@ -390,6 +395,11 @@ public sealed class RadioSession : IAsyncDisposable
         var device = Options.IsNetwork ? $"{Options.Host}:{Options.TcpPort ?? 9200}" : Options.ComPort ?? "";
         try
         {
+            // rigctld listens on an internal port; MultiCAT's relay takes the public
+            // one, so every client's traffic passes through us for attribution and
+            // visualization (the whole point of the mux having a face).
+            var internalPort = FreeTcpPort();
+            _internalRigctldPort = internalPort;
             var supervisor = new RigctldSupervisor(
                 new RigctldOptions
                 {
@@ -397,17 +407,37 @@ public sealed class RadioSession : IAsyncDisposable
                     HamlibModel = model,
                     Device = device,
                     BaudRate = Options.IsNetwork ? null : Options.BaudRate,
-                    ListenPort = rigctldPort,
+                    ListenPort = internalPort,
                 },
                 _loggerFactory.CreateLogger<RigctldSupervisor>());
             supervisor.Start();
             _supervisors[port.PortDisplay] = supervisor;
+
+            var relay = new RigctldRelay(rigctldPort, internalPort, _loggerFactory.CreateLogger<RigctldRelay>());
+            relay.Traffic += (clientId, line, isCommand) =>
+                ActivityObserved?.Invoke(
+                    this,
+                    new ArbiterActivity(clientId,
+                        isCommand ? ArbiterActivityKind.ClientCommand : ArbiterActivityKind.ClientResponse,
+                        CatFrame.FromAscii(line)),
+                    0, string.Empty, string.Empty);
+            _relays[port.PortDisplay] = relay;
+
             _portStatus[port.PortDisplay] = $"real rigctld on localhost:{rigctldPort} (hamlib model {model})";
         }
         catch (Exception ex)
         {
             _portStatus[port.PortDisplay] = $"rigctld failed: {ex.Message}";
         }
+    }
+
+    private static int FreeTcpPort()
+    {
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
     }
 
     /// <summary>Adds and starts a client port at runtime (Add port button).</summary>
@@ -442,16 +472,16 @@ public sealed class RadioSession : IAsyncDisposable
     public readonly record struct ConnectedClient(string ProcessName, int Pid, int ConnectionId, int RigctldPort);
 
     /// <summary>Enumerates the apps currently connected to this radio's rigctld
-    /// port(s), so the GUI can show a bubble per connection. Excludes our own poller.</summary>
+    /// port(s), so the GUI can show a bubble per connection. The relay is the source
+    /// of truth; our own poller talks to the internal port and never appears.</summary>
     public IReadOnlyList<ConnectedClient> ConnectedClients()
     {
-        var self = Environment.ProcessId;
         var clients = new List<ConnectedClient>();
         foreach (var port in Options.ClientPorts)
         {
-            if (port.RigctldPort is { } rp && _supervisors.ContainsKey(port.PortDisplay))
+            if (port.RigctldPort is { } rp && _relays.TryGetValue(port.PortDisplay, out var relay))
             {
-                foreach (var (pid, proc, connId) in TcpConnections.ClientsOnLoopbackPort(rp, self))
+                foreach (var (pid, proc, connId) in relay.Connections)
                 {
                     clients.Add(new ConnectedClient(proc, pid, connId, rp));
                 }
@@ -483,9 +513,14 @@ public sealed class RadioSession : IAsyncDisposable
             }
         }
         else if (port.RigctldPort is { } rigctldPort && active &&
+                 _relays.TryGetValue(port.PortDisplay, out var relay) && relay.ConnectionCount > 0)
+        {
+            status = $"{relay.ConnectionCount} client(s) on localhost:{rigctldPort}";
+        }
+        else if (port.RigctldPort is { } emulatedPort && active &&
                  _rigctldListeners.TryGetValue(port.PortDisplay, out var listener) && listener.ConnectionCount > 0)
         {
-            status = $"{listener.ConnectionCount} client(s) on localhost:{rigctldPort}";
+            status = $"{listener.ConnectionCount} client(s) on localhost:{emulatedPort}";
         }
 
         if (port.OmnirigRig is { } rig)
@@ -538,6 +573,11 @@ public sealed class RadioSession : IAsyncDisposable
         foreach (var listener in _rigctldListeners.Values)
         {
             await listener.DisposeAsync();
+        }
+
+        foreach (var relay in _relays.Values)
+        {
+            await relay.DisposeAsync();
         }
 
         foreach (var supervisor in _supervisors.Values)

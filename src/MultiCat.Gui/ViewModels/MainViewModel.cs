@@ -438,21 +438,40 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        // Relayed rigctld traffic: a client's command flows client → hub → radio;
+        // rigctld's reply pulses hub → client. Commands get a traffic line with the
+        // bubble's display name; replies are pulse-only (they'd swamp the monitor).
+        if (evt.Kind is "ClientCommand" or "ClientResponse")
+        {
+            var (link, display) = MatchClient(radio, evt.ClientId);
+            if (evt.Kind == "ClientCommand")
+            {
+                if (link > 0)
+                {
+                    radio.Pulse(link, towardRadio: true);
+                }
+
+                radio.Pulse(0, towardRadio: true);
+                radio.Traffic.Add(new TrafficEntry(evt.Time, $"{display} → {evt.Frame}", evt.Note));
+                while (radio.Traffic.Count > 9)
+                {
+                    radio.Traffic.RemoveAt(0);
+                }
+            }
+            else if (link > 0)
+            {
+                radio.Pulse(link, towardRadio: false);
+            }
+
+            return;
+        }
+
         var fromRadio = evt.Kind is "ResponseReceived" or "Unsolicited";
         var reachedRadio = evt.Kind is "CommandSent" or "SetSent" or "ResponseReceived" or "Unsolicited";
         if (reachedRadio)
         {
             // Radio↔hub link: command toward radio (amber), response back to hub (teal).
             radio.Pulse(0, towardRadio: !fromRadio);
-        }
-
-        // Client link: pulse the port that this event belongs to, if any. Cache hits
-        // never reach the radio but still serve a client, so they pulse here only.
-        var clientLink = MatchClientPort(radio, evt.ClientId);
-        if (clientLink > 0)
-        {
-            var toClient = evt.Kind is "ResponseReceived" or "CacheHit";
-            radio.Pulse(clientLink, towardRadio: !toClient);
         }
 
         var direction = fromRadio ? "radio →" : $"{evt.ClientId} →";
@@ -485,29 +504,26 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    // Maps an activity event's client id (e.g. "rigctld (WSJT-X, fldigi)#2" or a COM
-    // port label) to its client-port link index (1-based). Internal poll clients
-    // ("status"/"ptt") match nothing and return 0.
-    private static int MatchClientPort(RadioItemViewModel radio, string clientId)
+    // Maps a relayed client id ("process#connId") to its bubble: (1-based link index
+    // for the diagram, display name for the traffic line). Unknown ids fall back to
+    // the raw process name with no link.
+    private static (int Link, string Display) MatchClient(RadioItemViewModel radio, string clientId)
     {
-        if (clientId.Length == 0)
-        {
-            return 0;
-        }
+        var parts = clientId.Split('#');
+        var process = parts[0];
+        var connId = parts.Length > 1 && int.TryParse(parts[1], out var id) ? id : -1;
 
-        var baseId = clientId.Split('#')[0].Trim();
-        for (var i = 0; i < radio.Ports.Count; i++)
+        for (var i = 0; i < radio.Clients.Count; i++)
         {
-            var port = radio.Ports[i];
-            if (baseId.Equals(port.Label, StringComparison.OrdinalIgnoreCase) ||
-                baseId.Equals(port.PortDisplay, StringComparison.OrdinalIgnoreCase) ||
-                (port.Label.Length > 0 && baseId.StartsWith(port.Label, StringComparison.OrdinalIgnoreCase)))
+            var client = radio.Clients[i];
+            if (client.ProcessName.Equals(process, StringComparison.OrdinalIgnoreCase) &&
+                (connId < 0 || client.ConnectionId == connId))
             {
-                return i + 1;
+                return (i + 1, client.DisplayName);
             }
         }
 
-        return 0;
+        return (0, process);
     }
 
     private static RadioItemViewModel ToViewModel(RadioInfo radio)

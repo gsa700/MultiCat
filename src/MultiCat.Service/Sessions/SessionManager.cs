@@ -209,6 +209,8 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
         ArbiterActivityKind.ResponseReceived => "routed to sender",
         ArbiterActivityKind.Timeout => "no response from radio",
         ArbiterActivityKind.Unsolicited => "broadcast to all clients",
+        ArbiterActivityKind.ClientCommand => "via rigctld → radio",
+        ArbiterActivityKind.ClientResponse => "reply to client",
         _ => string.Empty,
     };
 

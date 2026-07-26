@@ -85,6 +85,23 @@ internal static class TcpConnections
         return clients;
     }
 
+    /// <summary>Resolves which process owns the loopback connection whose client-side
+    /// (ephemeral) port is <paramref name="clientPort"/>, connected to
+    /// <paramref name="listenPort"/>. Used by the relay to attribute an accepted
+    /// connection to an app.</summary>
+    public static (int Pid, string Process) OwnerOfClientPort(int clientPort, int listenPort)
+    {
+        foreach (var (pid, process, connectionId) in ClientsOnLoopbackPort(listenPort, excludePid: -1))
+        {
+            if (connectionId == clientPort)
+            {
+                return (pid, process);
+            }
+        }
+
+        return (0, $"port {clientPort}");
+    }
+
     private static int PortOf(uint netPort) => ((int)(netPort & 0xFF) << 8) | (int)((netPort >> 8) & 0xFF);
 
     private static string ProcessName(int pid)
