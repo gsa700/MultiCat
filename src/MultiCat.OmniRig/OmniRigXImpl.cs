@@ -27,6 +27,14 @@ public sealed class OmniRigXImpl : IOmniRigX, IConnectionPointContainer
 
     public int SoftwareVersion => 101;
 
+    /// <summary>Polls every rig. Driven by the server's STA-thread timer so change
+    /// events are fired from the apartment that owns the clients' sinks.</summary>
+    public void PollAll()
+    {
+        _rig1.Poll();
+        _rig2.Poll();
+    }
+
     public IRigX Rig1 => _rig1;
 
     public IRigX Rig2 => _rig2;

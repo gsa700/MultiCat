@@ -16,7 +16,6 @@ public sealed class RigXImpl : IRigX
     private readonly int _rigNumber;
     private readonly Action<int, int>? _paramsChanged;
     private readonly Action<int>? _statusChanged;
-    private readonly System.Timers.Timer? _pollTimer;
     private readonly PortBitsImpl _portBits = new();
 
     private long _lastFreq;
@@ -35,13 +34,13 @@ public sealed class RigXImpl : IRigX
         if (_client is not null)
         {
             Poll();
-            _pollTimer = new System.Timers.Timer(500) { AutoReset = true };
-            _pollTimer.Elapsed += (_, _) => Poll();
-            _pollTimer.Start();
         }
     }
 
-    private void Poll()
+    /// <summary>Polls the radio and raises change events. Called from the server's
+    /// STA thread — never a pool thread, because event sinks belong to that
+    /// apartment and are unusable from anywhere else.</summary>
+    public void Poll()
     {
         if (_client is null)
         {

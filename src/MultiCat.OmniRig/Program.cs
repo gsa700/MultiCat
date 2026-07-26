@@ -62,18 +62,86 @@ static int Elevate(string exePath, string verb)
 }
 
 // Server mode (launched by COM with -Embedding, or manually).
+//
+// Threading follows the reference implementation: real OmniRig is a Delphi VCL
+// application, i.e. a single-threaded apartment with a message pump, and it fires
+// events from that same thread ("FEvents.ParamsChange(...)" on the main thread).
+// That matters — a client's sink pointer is only usable in the apartment that
+// received it, so firing from a pool thread makes every QueryInterface fail and
+// no event is ever delivered. So: register the class object on an STA thread,
+// drive polling from a thread timer on that same thread, and pump messages.
 var settings = ServerSettings.Load(exePath);
-var instance = new OmniRigXImpl(settings.Host, settings.Rig1Port, settings.Rig2Port);
-var clsid = new Guid(OmniRigGuids.OmniRigXClass);
-var hr = CoRegisterClassObject(in clsid, new ClassFactory(() => instance), ClsctxLocalServer, RegclsMultipleUse, out _);
-Marshal.ThrowExceptionForHR(hr);
+var ready = new ManualResetEventSlim(false);
+Exception? startupError = null;
 
-Console.WriteLine($"MultiCAT OmniRig server running (rig1: {settings.Host}:{settings.Rig1Port}). Ctrl+C to stop.");
-await Task.Delay(Timeout.Infinite);
+var sta = new Thread(() =>
+{
+    try
+    {
+        var instance = new OmniRigXImpl(settings.Host, settings.Rig1Port, settings.Rig2Port);
+        var clsid = new Guid(OmniRigGuids.OmniRigXClass);
+        var hr = CoRegisterClassObject(
+            in clsid, new ClassFactory(() => instance), ClsctxLocalServer, RegclsMultipleUse, out _);
+        Marshal.ThrowExceptionForHR(hr);
+
+        // WM_TIMER with a null window posts to this thread's queue, so the callback
+        // runs on the STA thread — the apartment that owns the sinks.
+        // 'tick' stays rooted by this closure for the life of the thread.
+        TimerProc tick = (_, _, _, _) => instance.PollAll();
+        if (SetTimer(IntPtr.Zero, UIntPtr.Zero, 500, tick) == UIntPtr.Zero)
+        {
+            throw new InvalidOperationException("SetTimer failed");
+        }
+
+        ready.Set();
+
+        while (GetMessage(out var msg, IntPtr.Zero, 0, 0) > 0)
+        {
+            TranslateMessage(ref msg);
+            DispatchMessage(ref msg);
+        }
+    }
+    catch (Exception ex)
+    {
+        startupError = ex;
+        ready.Set();
+    }
+})
+{
+    IsBackground = false,
+    Name = "OmniRig STA",
+};
+
+sta.SetApartmentState(ApartmentState.STA);
+sta.Start();
+ready.Wait();
+
+if (startupError is not null)
+{
+    Console.Error.WriteLine($"OmniRig server failed to start: {startupError.Message}");
+    return 1;
+}
+
+// Note the wording: we are a CLIENT of rigctld on that port, not a listener there.
+Console.WriteLine(
+    $"MultiCAT OmniRig server running. Rig 1 reads from rigctld at {settings.Host}:{settings.Rig1Port}. Ctrl+C to stop.");
+sta.Join();
 return 0;
 
 [DllImport("ole32.dll")]
 static extern int CoRegisterClassObject(in Guid rclsid, [MarshalAs(UnmanagedType.IUnknown)] object pUnk, uint dwClsContext, uint flags, out uint lpdwRegister);
+
+[DllImport("user32.dll")]
+static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr nIDEvent, uint uElapse, TimerProc lpTimerFunc);
+
+[DllImport("user32.dll")]
+static extern int GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+
+[DllImport("user32.dll")]
+static extern bool TranslateMessage(in MSG lpMsg);
+
+[DllImport("user32.dll")]
+static extern IntPtr DispatchMessage(in MSG lpMsg);
 
 [DllImport("oleaut32.dll", CharSet = CharSet.Unicode)]
 static extern int LoadTypeLibEx(string szFile, uint regkind, out IntPtr pptlib);
@@ -173,6 +241,20 @@ static void Unregister()
         {
         }
     }
+}
+
+internal delegate void TimerProc(IntPtr hWnd, uint uMsg, UIntPtr nIDEvent, uint dwTime);
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MSG
+{
+    public IntPtr Hwnd;
+    public uint Message;
+    public IntPtr WParam;
+    public IntPtr LParam;
+    public uint Time;
+    public int PointX;
+    public int PointY;
 }
 
 // A plain class, not a record: positional records need init-only setters, which
