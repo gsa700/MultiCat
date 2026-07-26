@@ -51,6 +51,18 @@ public partial class RadioItemViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool TransmitOnVfoB { get; set; }
 
+    [ObservableProperty]
+    public partial string ModeA { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ModeB { get; set; } = string.Empty;
+
+    /// <summary>VFO B's mode is not always knowable, so its slot is left empty
+    /// rather than echoing VFO A's and implying something we did not read.</summary>
+    public bool ShowModeB => ModeB.Length > 0;
+
+    partial void OnModeBChanged(string value) => OnPropertyChanged(nameof(ShowModeB));
+
     public static string FormatVfo(long hz) => hz > 0 ? $"{hz / 1000.0:N2}" : "—";
 
     public string VfoAText => FormatVfo(VfoAHz);

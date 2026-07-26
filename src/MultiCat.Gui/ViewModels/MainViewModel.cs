@@ -305,6 +305,8 @@ public partial class MainViewModel : ViewModelBase
                 radio.TransmitOnVfoB = info.TxOnVfoB;
 
                 ReconcileClients(radio, info.Clients);
+                radio.ModeA = info.ModeA;
+                radio.ModeB = info.ModeB;
                 UpdateQuietNote(radio);
             }
         }
@@ -544,6 +546,8 @@ public partial class MainViewModel : ViewModelBase
         radio.VfoBHz = evt.VfoBHz;
         radio.Split = evt.Split;
         radio.TransmitOnVfoB = evt.TxOnVfoB;
+        radio.ModeA = evt.ModeA;
+        radio.ModeB = evt.ModeB;
 
         if (evt.FrequencyHz > 0 || evt.Mode.Length > 0)
         {
@@ -588,6 +592,8 @@ public partial class MainViewModel : ViewModelBase
             VfoBHz = radio.VfoBHz,
             Split = radio.Split,
             TransmitOnVfoB = radio.TxOnVfoB,
+            ModeA = radio.ModeA,
+            ModeB = radio.ModeB,
             Protocol = radio.Protocol,
             Connection = radio.Connection,
             ComPort = radio.ComPort,

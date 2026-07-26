@@ -73,12 +73,24 @@
             </StackPanel>
             <TextBlock Text="kHz" FontSize="10" Foreground="#8E8E8E" VerticalAlignment="Bottom" Margin="0,0,0,4" />
 
+            <StackPanel Spacing="1">
+              <TextBlock Text="MODE" FontSize="10" Foreground="#8E8E8E" />
+              <TextBlock Text="{Binding ModeA}" FontSize="14" FontWeight="Medium" VerticalAlignment="Bottom"
+                         Opacity="{Binding VfoAIsTransmit, Converter={x:Static vm:Converters.VfoOpacity}}" />
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
               <TextBlock Text="{Binding TransmitArrowLeft}" FontSize="15"
                          Foreground="{Binding VfoAIsTransmit, Converter={x:Static vm:Converters.ArrowBrush}}" />
               <TextBlock Text="TX" FontSize="11" FontWeight="Medium" Foreground="#8E8E8E" />
               <TextBlock Text="{Binding TransmitArrowRight}" FontSize="15"
                          Foreground="{Binding VfoBIsTransmit, Converter={x:Static vm:Converters.ArrowBrush}}" />
+            </StackPanel>
+
+            <StackPanel Spacing="1" IsVisible="{Binding ShowModeB}">
+              <TextBlock Text="MODE" FontSize="10" Foreground="#8E8E8E" />
+              <TextBlock Text="{Binding ModeB}" FontSize="14" FontWeight="Medium" VerticalAlignment="Bottom"
+                         Opacity="{Binding VfoBIsTransmit, Converter={x:Static vm:Converters.VfoOpacity}}" />
             </StackPanel>
 
             <StackPanel Spacing="1" IsVisible="{Binding ShowVfoB}">

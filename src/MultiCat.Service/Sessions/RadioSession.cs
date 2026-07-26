@@ -237,6 +237,12 @@ public sealed class RadioSession : IAsyncDisposable
 
     public bool Split => IsSoleOwnerRigctld ? _poller?.Split == true : _tracker.Split;
 
+    /// <summary>VFO A's mode.</summary>
+    public string ModeA => (IsSoleOwnerRigctld ? _poller?.Mode : _tracker.Mode) ?? string.Empty;
+
+    /// <summary>VFO B's mode, or empty when unknown — rigctld exposes only one mode.</summary>
+    public string ModeB => IsSoleOwnerRigctld ? string.Empty : _tracker.ModeB ?? string.Empty;
+
     /// <summary>Which VFO the radio will transmit on — what the arrow points at.</summary>
     public bool TransmitOnVfoB => Split;
 
@@ -395,6 +401,8 @@ public sealed class RadioSession : IAsyncDisposable
             await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("FB;"), _cts.Token);
             await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("FT;"), _cts.Token);
             await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("MD;"), _cts.Token);
+            // VFO B's mode, which differs from VFO A during a cross-mode split.
+            await Arbiter.ExecuteAsync("mux", CatFrame.FromAscii("MD$;"), _cts.Token);
         }
         catch (OperationCanceledException)
         {

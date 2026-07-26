@@ -197,6 +197,8 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
             VfoBHz = session.VfoBHz,
             Split = session.Split,
             TxOnVfoB = session.TransmitOnVfoB,
+            ModeA = session.ModeA,
+            ModeB = session.ModeB,
         };
 
         foreach (var channel in _subscribers.Values)

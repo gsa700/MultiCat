@@ -108,6 +108,8 @@ public sealed class ControlService(
                 VfoBHz = session.VfoBHz,
                 Split = session.Split,
                 TxOnVfoB = session.TransmitOnVfoB,
+                ModeA = session.ModeA,
+                ModeB = session.ModeB,
                 Connection = options.Simulator ? "Simulator" : options.Connection,
                 Protocol = options.Protocol,
                 ComPort = options.ComPort ?? string.Empty,

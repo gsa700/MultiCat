@@ -32,7 +32,17 @@ public sealed class RadioStateTracker
     /// </summary>
     public long? TransmitFrequencyHz => Split ? VfoBHz ?? FrequencyHz : FrequencyHz;
 
+    /// <summary>VFO A's mode.</summary>
     public string? Mode { get; private set; }
+
+    /// <summary>
+    /// VFO B's mode. Elecraft reports the sub/VFO-B value under the "$" suffix
+    /// ("MD$"), and it can differ from VFO A during a cross-mode split.
+    /// </summary>
+    public string? ModeB { get; private set; }
+
+    /// <summary>The mode that will be transmitted in — VFO B's while split is on.</summary>
+    public string? TransmitMode => Split ? ModeB ?? Mode : Mode;
 
     /// <summary>True while transmitting, false while receiving, null until first known.</summary>
     public bool? Transmitting { get; private set; }
@@ -44,6 +54,8 @@ public sealed class RadioStateTracker
     public event Action<long>? TransmitFrequencyChanged;
 
     public event Action<string>? ModeChanged;
+
+    public event Action<string>? ModeBChanged;
 
     public event Action<bool>? TransmitChanged;
 
@@ -111,6 +123,16 @@ public sealed class RadioStateTracker
                     VfoBHz = hz;
                     NotifyTransmitFrequency();
                 }
+            }
+        }
+        // VFO B's mode carries the "$" suffix, and must be matched before plain MD
+        // because it shares the prefix.
+        else if (text.StartsWith("MD$") && text.Length == 5 && Modes.TryGetValue(text[3], out var modeB))
+        {
+            if (modeB != ModeB)
+            {
+                ModeB = modeB;
+                ModeBChanged?.Invoke(modeB);
             }
         }
         else if (text.StartsWith("MD") && text.Length == 4 && Modes.TryGetValue(text[2], out var mode))

@@ -84,6 +84,8 @@ message RadioInfo {
   int64 vfo_b_hz = 15;          // 0 when unknown
   bool split = 16;
   bool tx_on_vfo_b = 17;        // which VFO the arrow points at
+  string mode_a = 18;
+  string mode_b = 19;           // empty when unknown (rigctld exposes one mode)
 }
 
 message ClientPortInfo {
@@ -162,4 +164,6 @@ message ActivityEvent {
   int64 vfo_b_hz = 11;
   bool split = 12;
   bool tx_on_vfo_b = 13;
+  string mode_a = 14;
+  string mode_b = 15;
 }
