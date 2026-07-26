@@ -93,6 +93,14 @@ public sealed class RigctldClient(string host, int port) : IDisposable
 
     public bool SetFrequency(long hz) => Exchange($"F {hz}", 1) is not null;
 
+    /// <summary>
+    /// The split transmit frequency, reported as VFO B. Note this is 0 while split
+    /// is off — "get_split_freq" describes the transmit VFO, not VFO B's dial, so a
+    /// simplex radio legitimately answers 0 here rather than VFO B's frequency.
+    /// Reading VFO B's actual dial needs "get_vfo_info VFOB", whose reply is
+    /// variable-length and so does not fit this fixed-line exchange; left for when
+    /// that can be added with a self-terminating read.
+    /// </summary>
     public long? GetFrequencyB()
     {
         var reply = Exchange("i", 1);
