@@ -57,6 +57,24 @@ public sealed record ClientPortOptions
     /// <summary>hamlib rigctld-protocol listener port on localhost (WSJT-X, fldigi, …).</summary>
     public int? RigctldPort { get; init; }
 
+    /// <summary>
+    /// FlexRadio command port, presenting this radio to a 4O3A Genius stack.
+    /// Normally 4992 — real radios are separate boxes, so a second radio on the
+    /// same host needs a different port (or its own address).
+    /// </summary>
+    public int? FlexPort { get; init; }
+
+    /// <summary>Subnet-directed broadcast address for Flex discovery. The host must
+    /// share the stack's subnet.</summary>
+    public string? FlexBroadcastAddress { get; init; }
+
+    /// <summary>When set, discovery is unicast only to these boxes and the virtual
+    /// radio stays invisible to every other picker on the LAN.</summary>
+    public List<string> FlexTargets { get; init; } = [];
+
+    /// <summary>Station callsign advertised to the stack.</summary>
+    public string? FlexCallsign { get; init; }
+
     /// <summary>1 or 2 when this rigctld port is also exposed through OmniRig as that Rig.
     /// Mutable so an OmniRig assignment can be added to an existing rigctld port.</summary>
     public int? OmnirigRig { get; set; }
@@ -81,6 +99,9 @@ public sealed class RadioSession : IAsyncDisposable
     private readonly Dictionary<string, string> _portStatus = [];
     private readonly ILoggerFactory _loggerFactory;
     private RigctldClientPoller? _poller;
+    private Core.Flex.FlexRadioState? _flexState;
+    private Flex.FlexCommandServer? _flexServer;
+    private Flex.FlexDiscoveryBroadcaster? _flexDiscovery;
 
     public RadioSession(RadioSessionOptions options, ILoggerFactory loggerFactory)
     {
@@ -156,8 +177,36 @@ public sealed class RadioSession : IAsyncDisposable
                 }
             }
 
+            FeedFlex(frequency, mode, ptt);
             ActivityObserved?.Invoke(this, activity, frequency, mode, ptt);
         };
+    }
+
+    /// <summary>
+    /// Passes a state change to the Flex endpoint, if one is running. Frequency and
+    /// mode are coalesced into a delta; keying is applied immediately and separately,
+    /// because an amplifier sequences off it.
+    /// </summary>
+    private void FeedFlex(long frequencyHz, string mode, string ptt)
+    {
+        if (_flexState is null)
+        {
+            return;
+        }
+
+        if (frequencyHz > 0 || mode.Length > 0)
+        {
+            _flexState.UpdateSlice(
+                0,
+                frequencyHz: frequencyHz > 0 ? frequencyHz : null,
+                mode: mode.Length > 0 ? mode : null);
+            _flexState.EmitPending();
+        }
+
+        if (ptt.Length > 0)
+        {
+            _flexState.SetTransmit(ptt == "tx");
+        }
     }
 
     /// <summary>A serial radio with a rigctld port: rigctld owns the port, we don't.</summary>
@@ -283,7 +332,12 @@ public sealed class RadioSession : IAsyncDisposable
 
         foreach (var port in Options.ClientPorts)
         {
-            if (!_portStatus.ContainsKey(port.PortDisplay))
+            if (port.FlexPort is { } flexPort)
+            {
+                // Reads its state from the poller, so it works here too.
+                StartFlexPort(port, flexPort);
+            }
+            else if (!_portStatus.ContainsKey(port.PortDisplay))
             {
                 _portStatus[port.PortDisplay] = "unavailable — rigctld owns the serial port";
             }
@@ -295,6 +349,7 @@ public sealed class RadioSession : IAsyncDisposable
     private void RaisePollActivity(string display, long frequency = 0, string mode = "", string ptt = "")
     {
         var activity = new ArbiterActivity("rigctld", ArbiterActivityKind.ResponseReceived, CatFrame.FromAscii(display));
+        FeedFlex(frequency, mode, ptt);
         ActivityObserved?.Invoke(this, activity, frequency, mode, ptt);
     }
 
@@ -318,8 +373,67 @@ public sealed class RadioSession : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Presents this radio to a 4O3A Genius stack: a command port the boxes connect
+    /// to, and a discovery beacon so they can find it. Announcing starts immediately,
+    /// so this only runs for a radio the user has explicitly configured for it.
+    /// </summary>
+    private void StartFlexPort(ClientPortOptions port, int flexPort)
+    {
+        try
+        {
+            var identity = new Core.Flex.FlexIdentity
+            {
+                Serial = Core.Flex.FlexIdentity.DeriveSerial(Options.Name),
+                AdvertiseIp = Flex.FlexDiscoveryBroadcaster.DetectLocalIp() ?? "127.0.0.1",
+                Nickname = Options.Name,
+                Name = Options.Name,
+                Callsign = port.FlexCallsign ?? string.Empty,
+                CommandPort = flexPort,
+            };
+
+            _flexState = new Core.Flex.FlexRadioState(identity);
+            _flexServer = new Flex.FlexCommandServer(
+                _flexState, flexPort, _loggerFactory.CreateLogger<Flex.FlexCommandServer>());
+            _flexServer.Start();
+
+            _flexDiscovery = new Flex.FlexDiscoveryBroadcaster(
+                identity,
+                new Flex.FlexDiscoveryOptions
+                {
+                    BroadcastAddress = port.FlexBroadcastAddress ?? "255.255.255.255",
+                    UnicastTargets = port.FlexTargets,
+                },
+                _loggerFactory.CreateLogger<Flex.FlexDiscoveryBroadcaster>(),
+                () => _flexServer?.ConnectedPeers() ?? []);
+            _flexDiscovery.Start();
+
+            // Seed the slice from what the radio has already told us, so a box that
+            // connects before the next dial movement still sees the right band.
+            var seedFrequency = IsSoleOwnerRigctld ? _poller?.FrequencyHz : _tracker.FrequencyHz;
+            var seedMode = IsSoleOwnerRigctld ? _poller?.Mode : _tracker.Mode;
+            if (seedFrequency is { } hz)
+            {
+                _flexState.UpdateSlice(0, frequencyHz: hz, mode: seedMode);
+                _flexState.EmitPending();
+            }
+
+            _portStatus[port.PortDisplay] = $"advertising as {identity.Serial} on {flexPort}";
+        }
+        catch (Exception ex)
+        {
+            _portStatus[port.PortDisplay] = $"failed: {ex.Message}";
+        }
+    }
+
     private void StartClientPort(ClientPortOptions port)
     {
+        if (port.FlexPort is { } flexPort)
+        {
+            StartFlexPort(port, flexPort);
+            return;
+        }
+
         // In sole-owner mode rigctld holds the radio, so there's no arbiter to back
         // com0com/raw-TCP endpoints. Only the rigctld port (started separately) works.
         if (_arbiter is null && port.RigctldPort is null)
@@ -588,6 +702,18 @@ public sealed class RadioSession : IAsyncDisposable
         foreach (var endpoint in _ownedEndpoints)
         {
             await endpoint.DisposeAsync();
+        }
+
+        // Stop advertising first, then drop the boxes: they should see the radio go
+        // away rather than keep a stale advert for something that no longer answers.
+        if (_flexDiscovery is not null)
+        {
+            await _flexDiscovery.DisposeAsync();
+        }
+
+        if (_flexServer is not null)
+        {
+            await _flexServer.DisposeAsync();
         }
 
         if (_poller is not null)
