@@ -41,6 +41,12 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
     /// selected one is polled.</summary>
     private bool _vfoInfoSupported = true;
 
+    /// <summary>How often to refresh VFO B while it is NOT the transmit VFO — it is
+    /// a resting dial then, and skipping it keeps the transmit VFO's poll quick.</summary>
+    private const int VfoBEveryNthCycle = 8;
+
+    private int _cyclesSinceVfoB = VfoBEveryNthCycle;
+
     public event Action<long>? FrequencyChanged;
 
     public event Action<long>? VfoBChanged;
@@ -129,17 +135,68 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
             return;
         }
 
-        var b = await AskAsync(reader, writer, "\\get_vfo_info VFOB", 5, ct);
+        var split = a[3] == "1";
 
-        ApplyVfoA(a[0], a[1]);
-        if (b is not null)
+        // Every exchange costs time on the wire, and on a serial rig that time is
+        // what the dial lag is made of. VFO B is only read every cycle when it is
+        // the transmit VFO — anything following the radio's band needs that one
+        // promptly. Otherwise it is a resting dial and a slower refresh will do.
+        var readVfoB = split || _cyclesSinceVfoB++ >= VfoBEveryNthCycle;
+        string[]? b = null;
+        if (readVfoB)
         {
-            ApplyVfoB(b[0], b[1]);
+            _cyclesSinceVfoB = 0;
+            b = await AskAsync(reader, writer, "\\get_vfo_info VFOB", 5, ct);
         }
 
-        // Split is reported by both VFOs; VFO A's is enough.
-        Split = a[3] == "1";
-        ApplyTransmitFrequency(Split && VfoBHz > 0 ? VfoBHz : FrequencyHz);
+        // State is settled before any event fires: a handler reads the transmit
+        // frequency straight back, and would otherwise get the previous cycle's.
+        var vfoAHz = long.TryParse(a[0], out var parsedA) ? parsedA : FrequencyHz;
+        var vfoBHz = b is not null && long.TryParse(b[0], out var parsedB) ? parsedB : VfoBHz;
+
+        Split = split;
+        var previousA = FrequencyHz;
+        var previousB = VfoBHz;
+        var previousMode = Mode;
+        var previousModeB = ModeB;
+
+        FrequencyHz = vfoAHz;
+        VfoBHz = vfoBHz;
+        Mode = a[1] is { Length: > 0 } modeA ? modeA : Mode;
+        if (b is not null && b[1] is { Length: > 0 } modeB)
+        {
+            ModeB = modeB;
+        }
+
+        var transmitHz = split && VfoBHz > 0 ? VfoBHz : FrequencyHz;
+        var transmitChanged = transmitHz != TransmitFrequencyHz;
+        TransmitFrequencyHz = transmitHz;
+
+        // Now that everything is consistent, tell the world.
+        if (FrequencyHz != previousA && FrequencyHz is { } hzA)
+        {
+            FrequencyChanged?.Invoke(hzA);
+        }
+
+        if (VfoBHz != previousB && VfoBHz > 0)
+        {
+            VfoBChanged?.Invoke(VfoBHz);
+        }
+
+        if (Mode != previousMode && Mode is { } m)
+        {
+            ModeChanged?.Invoke(m);
+        }
+
+        if (ModeB != previousModeB && ModeB is { } mb)
+        {
+            ModeBChanged?.Invoke(mb);
+        }
+
+        if (transmitChanged && transmitHz is { } tx)
+        {
+            TransmitFrequencyChanged?.Invoke(tx);
+        }
     }
 
     /// <summary>Fallback for backends without get_vfo_info: the selected VFO only,
