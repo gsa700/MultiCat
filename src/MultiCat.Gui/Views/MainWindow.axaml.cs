@@ -173,14 +173,40 @@ public partial class MainWindow : Window
             {
                 "rigctld (WSJT-X, fldigi, hamlib)",
                 "raw CAT over TCP",
-                "OmniRig Rig 1 (Log4OM, CW Skimmer…)",
-                "OmniRig Rig 2",
+                "Genius stack (Flex)",
+                "OmniRig Rig 1 — connects but does not track",
+                "OmniRig Rig 2 — connects but does not track",
             },
             SelectedIndex = 0,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
         var port = new TextBox { PlaceholderText = "auto (leave blank)", Width = 160, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
         var label = new TextBox { PlaceholderText = "optional", Width = 260, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+
+        // Flex-only fields, hidden until that endpoint is chosen.
+        var callsign = new TextBox { PlaceholderText = "station callsign", Width = 160, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var targets = new TextBox { PlaceholderText = "10.0.1.20, 10.0.1.21 (blank = broadcast)", Width = 300, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var flexFields = new StackPanel
+        {
+            Spacing = 10,
+            IsVisible = false,
+            Children =
+            {
+                new TextBlock { Text = "Callsign", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
+                callsign,
+                new TextBlock { Text = "Genius box addresses", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
+                targets,
+                new TextBlock
+                {
+                    Text = "Listing boxes keeps the radio invisible to everything else on the network. "
+                         + "Adding the port does not start advertising.",
+                    FontSize = 11,
+                    Foreground = Avalonia.Media.Brush.Parse("#8E8E8E"),
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                },
+            },
+        };
+        type.SelectionChanged += (_, _) => flexFields.IsVisible = type.SelectedIndex == 2;
 
         var dialog = new Window
         {
@@ -206,6 +232,7 @@ public partial class MainWindow : Window
                 port,
                 new TextBlock { Text = "Label", FontSize = 11, Foreground = Avalonia.Media.Brush.Parse("#8E8E8E") },
                 label,
+                flexFields,
                 new StackPanel
                 {
                     Orientation = Avalonia.Layout.Orientation.Horizontal,
@@ -222,12 +249,15 @@ public partial class MainWindow : Window
             var (endpointType, omnirigRig) = type.SelectedIndex switch
             {
                 1 => ("rawtcp", 0),
-                2 => ("omnirig", 1),
-                3 => ("omnirig", 2),
+                2 => ("flex", 0),
+                3 => ("omnirig", 1),
+                4 => ("omnirig", 2),
                 _ => ("rigctld", 0),
             };
             _ = int.TryParse(port.Text, out var portNumber);
-            await vm.AddPortAsync(endpointType, portNumber, label.Text ?? string.Empty, omnirigRig);
+            await vm.AddPortAsync(
+                endpointType, portNumber, label.Text ?? string.Empty, omnirigRig,
+                callsign.Text ?? string.Empty, targets.Text ?? string.Empty);
         }
     }
 

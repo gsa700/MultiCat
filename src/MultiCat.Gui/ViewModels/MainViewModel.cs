@@ -154,7 +154,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Adds a network client endpoint (rigctld, raw TCP, or an OmniRig
     /// assignment) to the selected radio. Port 0 lets the service auto-pick;
     /// omnirigRig is 1 or 2 for OmniRig. Reloads so the new port shows live.</summary>
-    public async Task AddPortAsync(string endpointType, int port, string label, int omnirigRig = 0)
+    public async Task AddPortAsync(
+        string endpointType, int port, string label, int omnirigRig = 0,
+        string flexCallsign = "", string flexTargets = "")
     {
         if (_connection is null || SelectedRadio is null)
         {
@@ -172,6 +174,8 @@ public partial class MainViewModel : ViewModelBase
                     Port = port,
                     Label = label,
                     OmnirigRig = omnirigRig,
+                    FlexCallsign = flexCallsign,
+                    FlexTargets = flexTargets,
                 },
                 deadline: DateTime.UtcNow.AddSeconds(90)); // OmniRig registration may prompt for elevation
 

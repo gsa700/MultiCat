@@ -68,10 +68,15 @@ message DriverState {
 
 message AddClientPortRequest {
   string radio = 1;
-  string endpoint_type = 2;   // "rigctld" | "rawtcp" | "omnirig"
-  int32 port = 3;             // 0 = auto-pick (rigctld/rawtcp)
+  string endpoint_type = 2;   // "rigctld" | "rawtcp" | "omnirig" | "flex"
+  int32 port = 3;             // 0 = auto-pick (rigctld/rawtcp/flex)
   string label = 4;
   int32 omnirig_rig = 5;      // 1 or 2 (omnirig assignment)
+  // Flex only. Targets is a comma-separated list of Genius box addresses;
+  // empty means announce by broadcast. Adding a Flex port never starts
+  // advertising — that stays an explicit action.
+  string flex_callsign = 6;
+  string flex_targets = 7;
 }
 
 message AddClientPortReply {

@@ -80,6 +80,36 @@ public sealed class ControlService(
                 };
             }
 
+            if (type == "flex")
+            {
+                var flexPort = request.Port > 0 ? request.Port : sessions.PickFreeTcpPort(4992);
+                var targets = request.FlexTargets
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .ToList();
+                var flex = new ClientPortOptions
+                {
+                    PortDisplay = $"Flex {flexPort}",
+                    Label = request.Label.Length > 0 ? request.Label : "Genius stack",
+                    FlexPort = flexPort,
+                    FlexCallsign = request.FlexCallsign.Length > 0 ? request.FlexCallsign : null,
+                    FlexTargets = targets,
+                    // Never on by adding it: announcing moves real antenna and
+                    // amplifier state, so the operator turns it on deliberately.
+                    FlexAdvertising = false,
+                };
+
+                session.AddClientPort(flex);
+                sessions.Persist();
+                var how = targets.Count > 0 ? string.Join(", ", targets) : "broadcast";
+                return new AddClientPortReply
+                {
+                    Ok = true,
+                    Message = $"Flex port ready on {flexPort} ({how}) — not advertising yet",
+                    PortDisplay = flex.PortDisplay,
+                    Port = flexPort,
+                };
+            }
+
             var (basePort, displayPrefix, defaultLabel) = type switch
             {
                 "rigctld" => (4532, "rigctld", "rigctld (WSJT-X, fldigi)"),
