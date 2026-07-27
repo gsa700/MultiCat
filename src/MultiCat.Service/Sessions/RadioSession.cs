@@ -390,9 +390,8 @@ public sealed class RadioSession : IAsyncDisposable
         }
         else
         {
-            // Fast, dedicated PTT poll so "on air" shows live (virtual-flex's TQX
-            // pattern). PTT can't ride the AI push path, so it must be polled.
-            _loops.Add(PttPollLoop(TimeSpan.FromMilliseconds(200)));
+            // Dedicated PTT poll — PTT can't ride the AI push path, so it is polled.
+            _loops.Add(PttPollLoop());
         }
 
         foreach (var port in Options.ClientPorts)
@@ -819,14 +818,31 @@ public sealed class RadioSession : IAsyncDisposable
         }
     }
 
-    private async Task PttPollLoop(TimeSpan interval)
+    /// <summary>
+    /// A key edge matters at two very different speeds. For the GUI's "on air" light,
+    /// 200 ms is instant to a human. For a Genius stack, the interlock must reach the
+    /// amplifier ahead of RF, and it can only be sent when this poll notices the edge —
+    /// at 200 ms the amp keys late and hangs after unkey (field-observed). So while a
+    /// Flex port exists the poll runs flat out, gated by the radio's own response
+    /// rate: each TQX; is a full arbiter transaction, so the loop self-paces to the
+    /// CAT link and a brief delay only separates transactions. The reference
+    /// implementation polls the same radio at 3 ms over the network, so the rig
+    /// sustains this comfortably. Checked per-cycle, so adding a Flex port speeds an
+    /// idle radio up without a restart.
+    /// </summary>
+    private TimeSpan PttPollInterval() =>
+        Options.ClientPorts.Any(p => p.FlexPort is not null)
+            ? TimeSpan.FromMilliseconds(3)
+            : TimeSpan.FromMilliseconds(200);
+
+    private async Task PttPollLoop()
     {
-        using var timer = new PeriodicTimer(interval);
         try
         {
-            while (await timer.WaitForNextTickAsync(_cts.Token))
+            while (!_cts.IsCancellationRequested)
             {
                 await Arbiter.ExecuteAsync("ptt", CatFrame.FromAscii("TQX;"), _cts.Token);
+                await Task.Delay(PttPollInterval(), _cts.Token);
             }
         }
         catch (OperationCanceledException)
