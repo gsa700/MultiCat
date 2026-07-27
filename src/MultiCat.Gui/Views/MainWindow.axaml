@@ -21,6 +21,16 @@
       <DockPanel Margin="8">
         <StackPanel DockPanel.Dock="Bottom" Margin="8,6,0,2" Spacing="2">
           <TextBlock Text="{Binding ServiceStatus}" FontSize="11" Foreground="#8E8E8E" TextWrapping="Wrap" />
+          <!-- Only appears when a newer release exists; opening it is the whole
+               action, because installing would drop the radio mid-session. -->
+          <Button IsVisible="{Binding UpdateAvailable}" Command="{Binding OpenReleasePageCommand}"
+                  Margin="0,6,0,0" Padding="8,5" HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Left" Background="#1A3B9E5F" BorderBrush="#3B9E5F">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Update available" FontSize="11" FontWeight="Medium" Foreground="#3B9E5F" />
+              <TextBlock Text="{Binding UpdateText}" FontSize="10" Foreground="#8E8E8E" TextWrapping="Wrap" />
+            </StackPanel>
+          </Button>
         </StackPanel>
         <Button DockPanel.Dock="Bottom" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center" Margin="0,8,0,0"

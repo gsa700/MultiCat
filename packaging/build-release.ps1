@@ -35,6 +35,8 @@ Copy-Item "$repo/packaging/appsettings.example-real-radio.json" $stage
 Copy-Item "$repo/LICENSE" $stage
 
 $zip = "$repo/dist/MultiCAT-$version-win-x64.zip"
-Compress-Archive -Path $stage -DestinationPath $zip -Force
+# Pack the CONTENTS, not the staging folder itself: extracting the zip already
+# creates a folder, and including one here buries everything a second level down.
+Compress-Archive -Path "$stage/*" -DestinationPath $zip -Force
 $mb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 Write-Host "Release ready: $zip ($mb MB)"

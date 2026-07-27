@@ -22,7 +22,9 @@ builder.Services.AddSingleton(new ClientNicknameStore(
     Path.Combine(AppContext.BaseDirectory, "client-nicknames.json")));
 builder.Services.AddSingleton<MultiCat.Service.VirtualPorts.Com0ComManager>();
 builder.Services.AddSingleton<MultiCat.Service.OmniRig.OmniRigCoordinator>();
+builder.Services.AddSingleton<MultiCat.Service.Updates.UpdateChecker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionManager>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MultiCat.Service.Updates.UpdateChecker>());
 
 var app = builder.Build();
 app.MapGrpcService<ControlService>();

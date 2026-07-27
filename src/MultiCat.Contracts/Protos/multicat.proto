@@ -16,6 +16,7 @@ service MultiCatControl {
   rpc DeleteRadio (DeleteRadioRequest) returns (SaveRadioReply);
   rpc ListComPorts (ListComPortsRequest) returns (ComPortList);
   rpc SetClientNickname (SetClientNicknameRequest) returns (SaveRadioReply);
+  rpc GetUpdateState (GetUpdateStateRequest) returns (UpdateState);
   rpc SetFlexAdvertising (SetFlexAdvertisingRequest) returns (SaveRadioReply);
 }
 
@@ -59,6 +60,17 @@ message GetRadiosRequest {}
 message StreamActivityRequest {}
 
 message GetDriverStateRequest {}
+
+message GetUpdateStateRequest {}
+
+// Whether a newer release exists. Reporting only — nothing is downloaded or
+// installed, because that would drop the radio and everything connected to it.
+message UpdateState {
+  bool available = 1;
+  string running_version = 2;
+  string latest_version = 3;
+  string release_url = 4;
+}
 
 // State of the virtual COM port driver (com0com today, MultiCAT's own later).
 message DriverState {

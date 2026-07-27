@@ -1,6 +1,6 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
-    <Version>0.3.2-alpha</Version>
+    <Version>0.3.3-alpha</Version>
     <Product>MultiCAT</Product>
     <Company>gsa700</Company>
     <Authors>gsa700</Authors>

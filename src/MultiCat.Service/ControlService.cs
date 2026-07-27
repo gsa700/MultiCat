@@ -10,7 +10,8 @@ public sealed class ControlService(
     SessionManager sessions,
     Com0ComManager driver,
     ClientNicknameStore nicknames,
-    MultiCat.Service.OmniRig.OmniRigCoordinator omnirig) : MultiCatControl.MultiCatControlBase
+    MultiCat.Service.OmniRig.OmniRigCoordinator omnirig,
+    MultiCat.Service.Updates.UpdateChecker updates) : MultiCatControl.MultiCatControlBase
 {
     public override Task<SaveRadioReply> SetClientNickname(SetClientNicknameRequest request, ServerCallContext context)
     {
@@ -36,6 +37,15 @@ public sealed class ControlService(
                 : "stopped advertising; boxes revert to their no-transceiver antenna",
         });
     }
+
+    public override Task<UpdateState> GetUpdateState(GetUpdateStateRequest request, ServerCallContext context) =>
+        Task.FromResult(new UpdateState
+        {
+            Available = updates.UpdateAvailable,
+            RunningVersion = updates.RunningVersion,
+            LatestVersion = updates.LatestVersion ?? string.Empty,
+            ReleaseUrl = updates.ReleaseUrl ?? string.Empty,
+        });
 
     public override Task<DriverState> GetDriverState(GetDriverStateRequest request, ServerCallContext context)
     {

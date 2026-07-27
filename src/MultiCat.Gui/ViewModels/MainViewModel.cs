@@ -14,6 +14,7 @@ public partial class MainViewModel : ViewModelBase
     private ServiceConnection? _connection;
     private CancellationTokenSource? _streamCts;
     private DispatcherTimer? _statusTimer;
+    private DispatcherTimer? _updateTimer;
     private readonly Lock _captureLock = new();
     private StreamWriter? _captureWriter;
 
@@ -36,6 +37,59 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string ServiceStatus { get; set; } = "connecting to service…";
+
+    /// <summary>Shown only when a newer release exists; clicking opens the release
+    /// page. MultiCAT never installs it itself — that would drop the radio and every
+    /// app connected to it, which is the operator's decision.</summary>
+    [ObservableProperty]
+    public partial bool UpdateAvailable { get; set; }
+
+    [ObservableProperty]
+    public partial string UpdateText { get; set; } = string.Empty;
+
+    private string? _updateUrl;
+
+    [RelayCommand]
+    private void OpenReleasePage()
+    {
+        if (_updateUrl is not { Length: > 0 } url)
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ServiceStatus = $"couldn't open the release page: {ex.Message}";
+        }
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        if (_connection is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var state = await _connection.Client.GetUpdateStateAsync(
+                new GetUpdateStateRequest(), deadline: DateTime.UtcNow.AddSeconds(5));
+            if (state.Available)
+            {
+                _updateUrl = state.ReleaseUrl;
+                UpdateText = $"MultiCAT {state.LatestVersion} is available — you have {state.RunningVersion}";
+                UpdateAvailable = true;
+            }
+        }
+        catch (Exception)
+        {
+            // Never worth reporting: the radio does not care whether GitHub answered.
+        }
+    }
 
     [ObservableProperty]
     public partial bool IsLive { get; set; }
@@ -482,6 +536,13 @@ public partial class MainViewModel : ViewModelBase
             _statusTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
                 (_, _) => _ = RefreshStatusesAsync());
             _statusTimer.Start();
+
+            // The service checks GitHub shortly after it starts, so look again on a
+            // slow timer rather than only once here.
+            _ = CheckForUpdateAsync();
+            _updateTimer = new DispatcherTimer(TimeSpan.FromMinutes(5), DispatcherPriority.Background,
+                (_, _) => _ = CheckForUpdateAsync());
+            _updateTimer.Start();
         }
         catch (Exception)
         {
@@ -701,6 +762,7 @@ public partial class MainViewModel : ViewModelBase
     public void Shutdown()
     {
         _statusTimer?.Stop();
+        _updateTimer?.Stop();
         StopCapture(string.Empty);
         _streamCts?.Cancel();
         _connection?.Dispose();
