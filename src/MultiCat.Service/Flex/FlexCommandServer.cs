@@ -166,7 +166,11 @@ public sealed class FlexCommandServer : IAsyncDisposable
             }
 
             connection.Dispose();
-            _logger.LogInformation("Flex client disconnected: {Peer}", connection.PeerAddress);
+            _logger.LogInformation(
+                "Flex client disconnected: {Peer} (identified as {Name}, banner {Banner})",
+                connection.PeerAddress,
+                connection.Session.FriendlyName ?? "nothing",
+                connection.Session.ClientBanner ?? "none");
         }
     }
 
@@ -200,9 +204,27 @@ public sealed class FlexCommandServer : IAsyncDisposable
                     continue;
                 }
 
+                // The first thing a box says is usually how it introduces itself, and
+                // is the only clue available when one never names itself at all.
+                if (!connection.LoggedFirstLine)
+                {
+                    connection.LoggedFirstLine = true;
+                    _logger.LogInformation("Flex client {Peer} first said: {Line}", connection.PeerAddress, line);
+                }
+
+                var identifiedBefore = connection.Session.FriendlyName;
                 foreach (var reply in connection.Session.Receive(line))
                 {
                     connection.Enqueue(reply);
+                }
+
+                // Say how a box identified itself the moment it does. Without this,
+                // one showing as a bare address is impossible to explain.
+                if (identifiedBefore is null && connection.Session.FriendlyName is { } name)
+                {
+                    _logger.LogInformation(
+                        "Flex client {Peer} identified as {Name} (from {Source})",
+                        connection.PeerAddress, name, connection.Session.Model is null ? "banner" : "amplifier create");
                 }
             }
         }
@@ -310,6 +332,8 @@ public sealed class FlexCommandServer : IAsyncDisposable
         public FlexSession Session { get; } = session;
 
         public string? PeerAddress { get; } = (tcp.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
+
+        public bool LoggedFirstLine { get; set; }
 
         public void Enqueue(string line) => _outbound.Writer.TryWrite(line);
 
