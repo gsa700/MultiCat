@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -21,6 +22,26 @@ public class SignalFlowControl : Control
     public static readonly StyledProperty<string?> RadioNameProperty =
         AvaloniaProperty.Register<SignalFlowControl, string?>(nameof(RadioName), "Radio");
 
+    /// <summary>Vertical space each client bubble needs to stay legible.</summary>
+    private const double RowHeight = 34;
+
+    /// <summary>Enough for the radio and hub even with nothing connected.</summary>
+    private const double MinimumHeight = 170;
+
+    /// <summary>
+    /// Grows with the number of connected clients, so a station with several apps
+    /// and a Genius stack does not squeeze them into an unreadable stack. Height is
+    /// asked for rather than fixed in the view, because only this control knows how
+    /// many bubbles it is about to draw.
+    /// </summary>
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var count = Clients?.Count() ?? 0;
+        var wanted = Math.Max(MinimumHeight, (count * RowHeight) + 24);
+        var width = double.IsInfinity(availableSize.Width) ? 400 : availableSize.Width;
+        return new Size(width, wanted);
+    }
+
     public static readonly StyledProperty<IEnumerable<ClientConnectionViewModel>?> ClientsProperty =
         AvaloniaProperty.Register<SignalFlowControl, IEnumerable<ClientConnectionViewModel>?>(nameof(Clients));
 
@@ -32,11 +53,16 @@ public class SignalFlowControl : Control
     private readonly List<(Rect Rect, ClientConnectionViewModel Client)> _clientHitboxes = [];
     private DispatcherTimer? _timer;
     private RadioItemViewModel? _boundVm;
+    private INotifyCollectionChanged? _watchedClients;
     private int _heartbeat;
 
     static SignalFlowControl()
     {
         AffectsRender<SignalFlowControl>(RadioNameProperty, ClientsProperty);
+
+        // The bubble count decides the height, so a new client list has to re-measure
+        // and not merely repaint at the old size.
+        AffectsMeasure<SignalFlowControl>(ClientsProperty);
     }
 
     /// <summary>Raised when the user clicks a client bubble (to rename it).</summary>
@@ -67,6 +93,42 @@ public class SignalFlowControl : Control
         {
             _boundVm.PulseRequested += OnPulse;
         }
+
+        WatchClientCollection();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ClientsProperty)
+        {
+            WatchClientCollection();
+        }
+    }
+
+    /// <summary>
+    /// Clients are added and removed from the same collection rather than the
+    /// property being replaced, so a property-level trigger never fires when a box
+    /// connects. Watching the collection is what makes the height follow reality.
+    /// </summary>
+    private void WatchClientCollection()
+    {
+        if (_watchedClients is not null)
+        {
+            _watchedClients.CollectionChanged -= OnClientsChanged;
+        }
+
+        _watchedClients = Clients as INotifyCollectionChanged;
+        if (_watchedClients is not null)
+        {
+            _watchedClients.CollectionChanged += OnClientsChanged;
+        }
+    }
+
+    private void OnClientsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        InvalidateMeasure();
+        InvalidateVisual();
     }
 
     // link 0 = radio↔hub; link N (1-based) = the Nth client. TowardRadio moves the
@@ -101,6 +163,12 @@ public class SignalFlowControl : Control
         {
             _boundVm.PulseRequested -= OnPulse;
             _boundVm = null;
+        }
+
+        if (_watchedClients is not null)
+        {
+            _watchedClients.CollectionChanged -= OnClientsChanged;
+            _watchedClients = null;
         }
 
         base.OnDetachedFromVisualTree(e);

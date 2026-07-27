@@ -146,7 +146,9 @@
         </WrapPanel>
 
         <Border BorderBrush="#40808080" BorderThickness="1" CornerRadius="8" Padding="4">
-          <controls:SignalFlowControl x:Name="SignalFlow" Height="170"
+          <!-- No fixed height: the control measures itself from how many clients
+               it has to draw, so more bubbles get more room instead of squeezing. -->
+          <controls:SignalFlowControl x:Name="SignalFlow"
                                       RadioName="{Binding Name}"
                                       Clients="{Binding Clients}" />
         </Border>
