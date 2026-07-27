@@ -2,15 +2,16 @@
 
 *One radio, many owners.*
 
-![MultiCAT sharing one Elecraft K4 with WSJT-X, Log4OM, and an LP-100A monitor — live client bubbles, per-app attributed CAT traffic, and activity LED](docs/multicat-live.gif)
+![MultiCAT sharing one Elecraft K4 with Log4OM, an LP-100A monitor and a three-box 4O3A Genius stack — both VFOs with the transmit arrow, live client bubbles, and per-app attributed CAT traffic](docs/multicat-live.gif)
 
-*Live: three apps sharing one K4 through real hamlib — every command attributed to the app that sent it.*
+*Live: one K4 shared by a logger, a wattmeter monitor and a PowerGenius, TunerGenius
+and AntennaGenius — every command attributed to the app that sent it.*
 
 MultiCAT is a graphical CAT multiplexer for Windows: it takes exclusive ownership of a
 radio's CAT port, then shares that radio with as many applications as you like — each
-one convinced it has the rig to itself. Configure your rig from the hamlib database,
-hand N1MM+ a virtual COM port, point WSJT-X at the built-in rigctld-compatible TCP
-listener, and let your own tools subscribe to a clean frequency/mode event stream.
+one convinced it has the rig to itself. Pick your rig from the hamlib database, point
+WSJT-X and your logger at it over the network, and drive a 4O3A Genius stack from a
+radio that isn't a FlexRadio.
 
 ## Why
 
@@ -20,15 +21,18 @@ transactions; rigctld multiplexes properly but only for network-aware clients;
 OmniRig has its own rig database and its own client API; the polished commercial
 suites are single-brand and closed source. MultiCAT aims at the missing combination:
 
-- **Protocol-aware arbitration** — one command outstanding at a time, each response
-  routed back to only the client that asked, unsolicited traffic broadcast to all.
-- **Virtual COM ports** — legacy apps that only know "a Kenwood on COM5" work unmodified.
-- **hamlib underneath** — rig selection and connection defaults come from the hamlib
-  rig database; a rigctld-compatible TCP listener comes free per radio.
-- **Poll deduplication** — three apps polling `FA;` at 4 Hz becomes one poll on the
-  wire and two cache hits.
-- **A live traffic monitor** — every decoded frame attributed to the app that sent it,
-  with notes on how the mux handled it. CAT debugging without the mystery.
+- **Real hamlib underneath** — MultiCAT supervises an actual `rigctld` per radio, so
+  anything hamlib-aware connects and behaves, rather than meeting an emulation that
+  works until it doesn't.
+- **A 4O3A Genius stack from any radio** — MultiCAT presents your rig to a
+  PowerGenius, TunerGenius and AntennaGenius as a FlexRadio, so the amplifier, tuner
+  and antenna switch follow a radio that never spoke Flex.
+- **The transmit VFO, not the dial** — band-following gear is told the frequency you
+  are about to transmit on, which during a split QSO is the other VFO entirely.
+- **A live traffic monitor** — every command attributed to the app that sent it, so
+  "which program just moved my radio?" has an answer.
+- **You can see what is connected** — a bubble per live client, nameable, so a station
+  running five things is legible at a glance.
 
 ## Status
 
@@ -60,21 +64,34 @@ Working today:
   hamlib 4.7.2 at build time by `tools/HamlibHarvest` — the shipped app contains
   no native hamlib, only the knowledge)
 
-- **OmniRig-compatible COM server** (`MultiCat.OmniRig`): registers as
-  `OmniRig.OmniRigX` (one UAC prompt; machine-wide, because current Windows 11
-  builds no longer honor per-user COM server activation), implements VE3NEA's
-  published interfaces GUID-for-GUID, and forwards to MultiCAT's rigctld
-  endpoint — so Log4OM, CW Skimmer, SDR Console, WSJT-X, and other
-  OmniRig-aware apps see "OmniRig" while MultiCAT arbitrates. Verified with
-  both late-bound (IDispatch) and early-bound (vtable/typelib) clients,
-  including COM launch-on-demand. (Note: N1MM+ supports neither OmniRig nor
-  any network CAT — it is serial-COM-only, making it the prime motivation for
-  the first-party virtual COM driver.)
+- **4O3A Genius stack endpoint** — MultiCAT impersonates a FLEX-8600 so a
+  PowerGenius, TunerGenius and AntennaGenius follow any hamlib-supported radio.
+  **Verified against real hardware**: all three boxes following an Elecraft K4D
+  through MultiCAT, band-follow and PTT interlock, RF passing. Discovery can be
+  pinned to your boxes so the radio stays invisible to everything else on the
+  network, and advertising is always a deliberate action — stopping it returns
+  every box to its no-transceiver antenna, as a real radio being switched off would
+- **Both VFOs, radio-style** — `VFO A · mode · ◀TX · mode · VFO B` with split
+  indicated, because during a split QSO the frequency that matters to an amplifier
+  is the one you are about to transmit on
+- Configuration kept in `C:\ProgramData\MultiCAT\radios.json`, so downloading a new
+  version does not lose your radios; the app tells you when a newer release exists,
+  and never installs it itself
+
+**OmniRig: connects, but does not track.** `MultiCat.OmniRig` registers as
+`OmniRig.OmniRigX` and implements VE3NEA's interfaces GUID-for-GUID, and an
+early-bound client reads it correctly. Late-bound clients — which is what real
+OmniRig applications are — read the frequency once and never see another update.
+The cause is a .NET limitation rather than a bug we can reach: an out-of-process
+managed COM server does not deliver events to those clients, and moving the server
+to .NET Framework 4.8 fixed reading without fixing tracking. **Use the
+Hamlib/rigctld path instead** — Log4OM, CW Skimmer and the rest support it, and it
+works properly. The server is still in the box for anyone who wants to experiment.
 
 Not yet built: CI-V session wiring (the framer exists; sessions are
-Kenwood-family for now), PTT arbitration, applying the selected rig's serial
-defaults to the connection form, OmniRig event notifications to early-bound
-sinks under load, first-party virtual COM driver.
+Kenwood-family for now), PTT arbitration between clients, applying a selected rig's
+serial defaults to the connection form, SO2R (two virtual radios on one host),
+first-party virtual COM driver.
 
 ### Virtual COM ports and the driver reality
 
