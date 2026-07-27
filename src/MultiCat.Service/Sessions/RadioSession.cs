@@ -76,6 +76,14 @@ public sealed record ClientPortOptions
     public string? FlexCallsign { get; init; }
 
     /// <summary>
+    /// Serial to advertise, overriding the one derived from the radio's name. The
+    /// Genius boxes follow a serial they have been paired to, so pointing them at a
+    /// different radio means advertising the serial they already know — otherwise
+    /// they ignore it, or offer it as a new radio to pair.
+    /// </summary>
+    public string? FlexSerial { get; init; }
+
+    /// <summary>
     /// Whether to actually advertise. Off by default and mutable: announcing makes a
     /// Genius stack follow this radio and move real antenna and amplifier state, so
     /// it should be a decision the operator takes, not a side effect of adding a port.
@@ -472,7 +480,9 @@ public sealed class RadioSession : IAsyncDisposable
         {
             var identity = new Core.Flex.FlexIdentity
             {
-                Serial = Core.Flex.FlexIdentity.DeriveSerial(Options.Name),
+                Serial = port.FlexSerial is { Length: > 0 } configured
+                    ? configured
+                    : Core.Flex.FlexIdentity.DeriveSerial(Options.Name),
                 AdvertiseIp = Flex.FlexDiscoveryBroadcaster.DetectLocalIp() ?? "127.0.0.1",
                 Nickname = Options.Name,
                 Name = Options.Name,

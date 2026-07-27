@@ -33,6 +33,19 @@ public sealed class FlexCommandServer : IAsyncDisposable
         _logger = logger;
         _radio.SliceLineReady += OnSliceLine;
         _radio.BroadcastLineReady += OnBroadcastLine;
+
+        // A box recognises a key edge as its own by finding its connection handle
+        // here, so this is read live from the connected clients — a box that drops
+        // and reconnects must not leave its old handle behind.
+        _radio.EngagedAmplifierHandles = () =>
+        {
+            lock (_clientGate)
+            {
+                return [.. _clients
+                    .Where(c => c.Session.IsAmplifier)
+                    .Select(c => $"0x{c.Session.Handle:X8}")];
+            }
+        };
     }
 
     /// <summary>The port actually bound — useful when the caller asked for 0.</summary>

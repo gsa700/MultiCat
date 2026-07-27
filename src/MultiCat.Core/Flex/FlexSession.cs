@@ -49,8 +49,40 @@ public sealed class FlexSession(IFlexRadioState radio)
     ];
 
     /// <summary>Handles one received line and returns whatever should be sent back.</summary>
+    /// <summary>
+    /// Drops console noise that arrives glued to the front of a command. The
+    /// TunerGenius periodically emits its terminal banner — a screen-clear escape,
+    /// "TunerGenius", "Password:" — into the same stream, with the next real command
+    /// stuck on the end. Taking the command from the last command marker in the line
+    /// keeps those from being lost; a dropped command is never acknowledged, so the
+    /// box eventually gives up and reconnects.
+    /// </summary>
+    public static string StripConsoleNoise(string line)
+    {
+        var marker = line.LastIndexOf('|');
+        if (marker <= 0)
+        {
+            return line;
+        }
+
+        // Walk back over the sequence number to the command letter that starts it.
+        var start = marker - 1;
+        while (start >= 0 && char.IsAsciiDigit(line[start]))
+        {
+            start--;
+        }
+
+        return start >= 0 && line[start] is 'C' or 'c' or 'R' or 'V' ? line[start..] : line;
+    }
+
     public IReadOnlyList<string> Receive(string line)
     {
+        if (line.Length == 0)
+        {
+            return [];
+        }
+
+        line = StripConsoleNoise(line);
         if (line.Length == 0)
         {
             return [];

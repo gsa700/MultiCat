@@ -22,6 +22,7 @@ public sealed class FlexRadioState : IFlexRadioState
     private readonly Lock _gate = new();
     private readonly Dictionary<int, FlexSlice> _slices = new() { [0] = new FlexSlice() };
     private readonly Dictionary<int, (bool Frequency, bool Mode)> _pending = [];
+    private readonly Dictionary<uint, IReadOnlyDictionary<string, string>> _amplifiers = [];
     private readonly FlexIdentity _identity;
 
     private uint _nextHandle = 0x40000000;   // object handles start high, like SmartSDR
@@ -40,8 +41,18 @@ public sealed class FlexRadioState : IFlexRadioState
 
     public IReadOnlyDictionary<int, FlexSlice> Slices => _slices;
 
-    /// <summary>Connection handles of clients that registered as amplifiers.</summary>
-    public List<string> EngagedAmplifiers { get; } = [];
+    /// <summary>
+    /// Supplies the CONNECTION handles of the clients currently registered as
+    /// amplifiers. It must be the connection handle, not the handle returned by
+    /// "amplifier create": a box matches its own connection handle in the
+    /// interlock's amplifier= list to recognise that a key edge is for it, and
+    /// will not LAN-key if it cannot find itself there.
+    /// <para>
+    /// Asked afresh each time rather than accumulated, so a box that drops and
+    /// reconnects does not leave a stale handle keying nothing.
+    /// </para>
+    /// </summary>
+    public Func<IReadOnlyList<string>>? EngagedAmplifierHandles { get; set; }
 
     public uint AllocateHandle()
     {
@@ -61,11 +72,14 @@ public sealed class FlexRadioState : IFlexRadioState
         }
     }
 
+    /// <summary>Records an amplifier object. The handle here is the object's own,
+    /// returned to the client; the interlock list is built from connection handles
+    /// instead (see <see cref="EngagedAmplifierHandles"/>).</summary>
     public void AddAmplifier(uint handle, IReadOnlyDictionary<string, string> properties)
     {
         lock (_gate)
         {
-            EngagedAmplifiers.Add($"0x{handle:X8}");
+            _amplifiers[handle] = properties;
         }
     }
 
@@ -90,7 +104,7 @@ public sealed class FlexRadioState : IFlexRadioState
     {
         lock (_gate)
         {
-            EngagedAmplifiers.Clear();
+            _amplifiers.Clear();
             _pending.Clear();
             _nextMeterId = 1;
             _interlockCount = 0;
@@ -291,7 +305,7 @@ public sealed class FlexRadioState : IFlexRadioState
         var txClientHandle = keyed ? FlexSlice.GuiClientHandle : "0x00000000";
         var source = state is "PTT_REQUESTED" or "TRANSMITTING" ? "SW" : string.Empty;
         var amplifiers = state is "TRANSMITTING" or "UNKEY_REQUESTED"
-            ? string.Join(",", EngagedAmplifiers)
+            ? string.Join(",", EngagedAmplifierHandles?.Invoke() ?? [])
             : string.Empty;
 
         return $"S0|interlock tx_client_handle={txClientHandle} state={state} " +

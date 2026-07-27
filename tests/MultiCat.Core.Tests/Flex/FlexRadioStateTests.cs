@@ -157,7 +157,7 @@ public class FlexRadioStateTests
     [Fact]
     public void WhileTransmitting_TheEngagedAmplifiersAreNamed_SoTheAmpKnowsToKey()
     {
-        _radio.AddAmplifier(0x41000000, new Dictionary<string, string>());
+        _radio.EngagedAmplifierHandles = () => ["0x41000000"];
 
         _radio.SetTransmit(true);
 
@@ -169,7 +169,7 @@ public class FlexRadioStateTests
     [Fact]
     public void WhileIdle_NoAmplifierIsEngagedAndNoClientHoldsTransmit()
     {
-        _radio.AddAmplifier(0x41000000, new Dictionary<string, string>());
+        _radio.EngagedAmplifierHandles = () => ["0x41000000"];
 
         var idle = _radio.InterlockStatusLine();
 
@@ -211,8 +211,39 @@ public class FlexRadioStateTests
 
         _radio.Reset();
 
-        Assert.Empty(_radio.EngagedAmplifiers);
         Assert.Equal(1, _radio.AllocateMeterId());
+    }
+
+    [Fact]
+    public void KeyingListsTheAmplifiersConnectionHandles_NotItsObjectHandles()
+    {
+        // A box finds its own CONNECTION handle here to know a key edge is for it;
+        // publishing the handle returned by "amplifier create" instead leaves every
+        // box unable to recognise itself, so none of them key.
+        _radio.AddAmplifier(0x41000000, new Dictionary<string, string>());
+        _radio.EngagedAmplifierHandles = () => ["0x40000000", "0x44000000"];
+
+        _radio.SetTransmit(true);
+        var keyed = _broadcastLines.Last(l => l.Contains("state=TRANSMITTING"));
+
+        Assert.Contains("amplifier=0x40000000,0x44000000", keyed);
+        Assert.DoesNotContain("0x41000000", keyed);
+    }
+
+    [Fact]
+    public void ADisconnectedAmplifierDropsOutOfTheNextKey()
+    {
+        var connected = new List<string> { "0x40000000", "0x44000000" };
+        _radio.EngagedAmplifierHandles = () => connected;
+
+        _radio.SetTransmit(true);
+        _radio.SetTransmit(false);
+        connected.Remove("0x44000000");     // that box dropped
+        _radio.SetTransmit(true);
+
+        var keyed = _broadcastLines.Last(l => l.Contains("state=TRANSMITTING"));
+        Assert.Contains("amplifier=0x40000000", keyed);
+        Assert.DoesNotContain("0x44000000", keyed);
     }
 
     [Fact]
