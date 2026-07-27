@@ -25,7 +25,49 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
         _logger = logger;
         _loggerFactory = loggerFactory;
         _omnirig = omnirig;
-        _store = new RadioConfigStore(Path.Combine(environment.ContentRootPath, "appsettings.json"));
+        _store = new RadioConfigStore(ResolveConfigPath(environment, logger));
+    }
+
+    /// <summary>
+    /// Where the operator's radios live. Deliberately NOT beside the executable:
+    /// MultiCAT is downloaded as a zip, so a new version is a new folder, and config
+    /// kept next to the exe would be lost on every update. This path survives them.
+    /// <para>
+    /// On first run the settings shipped in the download are copied across, so an
+    /// existing installation keeps its radios and a fresh one starts with the
+    /// defaults.
+    /// </para>
+    /// </summary>
+    public static string ResolveConfigPath(IHostEnvironment environment, ILogger logger)
+    {
+        var directory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "MultiCAT");
+        var userConfig = Path.Combine(directory, "radios.json");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            if (!File.Exists(userConfig))
+            {
+                var bundled = Path.Combine(environment.ContentRootPath, "appsettings.json");
+                if (File.Exists(bundled))
+                {
+                    File.Copy(bundled, userConfig);
+                    logger.LogInformation("Started radio configuration at {Path}", userConfig);
+                }
+            }
+
+            return userConfig;
+        }
+        catch (Exception ex)
+        {
+            // Somewhere unwritable: fall back to the old location rather than refuse
+            // to run. Configuration will not survive an update, which is worth saying.
+            logger.LogWarning(
+                ex, "Cannot use {Path} for configuration; falling back beside the program, which an update will replace",
+                userConfig);
+            return Path.Combine(environment.ContentRootPath, "appsettings.json");
+        }
     }
 
     public IReadOnlyList<RadioSession> Sessions => _sessions;

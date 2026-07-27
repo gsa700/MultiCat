@@ -1,5 +1,5 @@
-MultiCAT 0.1.0-alpha — Quick Start
-==================================
+MultiCAT — Quick Start
+======================
 
 One radio, many apps. MultiCAT owns your radio's CAT port and shares it with
 as many programs as you like. Pre-alpha: expect rough edges. Windows x64 only.
@@ -31,7 +31,12 @@ WHAT'S IN THIS FOLDER
    line. Everything is saved automatically; no restart needed.
 
    (You can still hand-edit MultiCat.Service\appsettings.json if you prefer —
-   see appsettings.example-real-radio.json for serial and network examples.)
+   see appsettings.example-real-radio.json for serial and network examples.
+
+   YOUR RADIOS ARE KEPT OUTSIDE THIS FOLDER, in
+     C:\ProgramData\MultiCAT\radios.json
+   so downloading a new version does not lose them. The appsettings.json in
+   MultiCat.Service is only the starting point for a first run.)
 
 
 3. POINT YOUR SOFTWARE AT MULTICAT (no COM driver needed)
