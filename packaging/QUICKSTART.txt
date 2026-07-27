@@ -49,6 +49,26 @@ WHAT'S IN THIS FOLDER
    they happen, so you can see the sharing working.
 
 
+4. DRIVE A 4O3A GENIUS STACK FROM ANY RADIO (optional)
+   MultiCAT can present your radio to a PowerGenius / TunerGenius /
+   AntennaGenius stack as a FlexRadio, so the amplifier, tuner and antenna
+   switch follow it - from ANY hamlib-supported radio, not just a Flex.
+
+   In the MultiCAT window: "Add port" -> "Genius stack (Flex)". Enter your
+   callsign, and optionally the addresses of your Genius boxes (listing them
+   keeps the radio invisible to everything else on the network).
+
+   Adding the port does NOT start advertising. When you are ready, use
+   "Start advertising" on the Genius stack panel and confirm. The panel then
+   shows the serial being claimed and how many boxes are connected - pair it
+   in the 4O3A configurator by that serial.
+
+   IMPORTANT: while advertising, your stack follows this radio and will
+   switch antennas and set amplifier band from its TRANSMIT frequency (VFO B
+   when split is on). Stop advertising and every box reverts to its
+   no-transceiver antenna, as it would if a real radio were switched off.
+
+
 KNOWN LIMITS IN THIS PRE-ALPHA
   - Supervised real rigctld drives both network radios (e.g. Elecraft K4/K4D
     over Ethernet) and serial radios (rigctld owns the COM port). Both verified
@@ -58,5 +78,9 @@ KNOWN LIMITS IN THIS PRE-ALPHA
     network endpoints above are the recommended path and need no driver.
   - OmniRig is a dead end for late-bound clients on modern Windows; use the
     Hamlib/rigctld path above instead (Log4OM, CW Skimmer, etc. support it).
+  - The Genius stack endpoint is verified against a real PGXL, TGXL and AGXL
+    on one radio. Two virtual radios on one host (SO2R) is untested - they get
+    separate ports, but whether the 4O3A apps honour a port other than 4992
+    is unknown; a second host or address may be needed.
 
 Source, license (GPLv3), and issues: https://github.com/gsa700/MultiCat
