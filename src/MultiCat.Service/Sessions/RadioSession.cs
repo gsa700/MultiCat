@@ -503,6 +503,14 @@ public sealed class RadioSession : IAsyncDisposable
             _flexState = new Core.Flex.FlexRadioState(identity);
             _flexServer = new Flex.FlexCommandServer(
                 _flexState, flexPort, _loggerFactory.CreateLogger<Flex.FlexCommandServer>());
+
+            // Attribute what goes to each box so its link on the diagram pulses.
+            // No frequency or mode rides along: this says "traffic happened", and
+            // the state it carried has already been reported by the radio's own event.
+            _flexServer.BoxTraffic += name => ActivityObserved?.Invoke(
+                this,
+                new ArbiterActivity(name, ArbiterActivityKind.ResponseReceived, CatFrame.FromAscii("slice")),
+                0, string.Empty, string.Empty);
             _flexServer.Start();
 
             var discoveryOptions = new Flex.FlexDiscoveryOptions
@@ -738,6 +746,17 @@ public sealed class RadioSession : IAsyncDisposable
                 {
                     clients.Add(new ConnectedClient(proc, pid, connId, rp));
                 }
+            }
+        }
+
+        // Genius boxes arrive on the Flex port rather than through a relay, but they
+        // are consumers of this radio just the same and belong on the diagram. They
+        // have no process id — they are not on this machine — so that stays 0.
+        if (_flexServer is not null && _flexPort?.FlexPort is { } flexPort)
+        {
+            foreach (var box in _flexServer.ConnectedBoxes())
+            {
+                clients.Add(new ConnectedClient(box.Name, 0, box.ConnectionId, flexPort));
             }
         }
 

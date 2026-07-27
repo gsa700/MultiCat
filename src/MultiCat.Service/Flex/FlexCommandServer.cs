@@ -69,6 +69,25 @@ public sealed class FlexCommandServer : IAsyncDisposable
         }
     }
 
+    /// <summary>One connected Genius box, for the signal-flow display.</summary>
+    public readonly record struct ConnectedBox(string Name, string Address, int ConnectionId);
+
+    /// <summary>
+    /// The boxes currently connected, named by the model each reported when it
+    /// registered. A box that has connected but not yet registered is still listed —
+    /// it is on the wire, and hiding it would make the display lag reality.
+    /// </summary>
+    public IReadOnlyList<ConnectedBox> ConnectedBoxes()
+    {
+        lock (_clientGate)
+        {
+            return [.. _clients.Select(c => new ConnectedBox(
+                c.Session.Model ?? c.PeerAddress ?? "box",
+                c.PeerAddress ?? string.Empty,
+                (int)c.Session.Handle))];
+        }
+    }
+
     /// <summary>Addresses of connected boxes, so discovery can keep reaching a live
     /// box even when its configured address has gone stale.</summary>
     public IEnumerable<string> ConnectedPeers()
@@ -189,9 +208,15 @@ public sealed class FlexCommandServer : IAsyncDisposable
         }
     }
 
+    /// <summary>Raised with a box's name each time something is sent to it, so the
+    /// signal-flow display can show the Genius links carrying traffic rather than
+    /// sitting inert.</summary>
+    public event Action<string>? BoxTraffic;
+
     // Slice traffic only reaches clients that asked for it...
     private void OnSliceLine(string line)
     {
+        List<string> served = [];
         lock (_clientGate)
         {
             foreach (var client in _clients)
@@ -199,8 +224,14 @@ public sealed class FlexCommandServer : IAsyncDisposable
                 if (client.Session.IsSubscribedTo("slice"))
                 {
                     client.Enqueue(line);
+                    served.Add(client.Session.Model ?? client.PeerAddress ?? "box");
                 }
             }
+        }
+
+        foreach (var name in served)
+        {
+            BoxTraffic?.Invoke(name);
         }
     }
 

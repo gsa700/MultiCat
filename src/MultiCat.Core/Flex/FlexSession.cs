@@ -27,6 +27,9 @@ public sealed class FlexSession(IFlexRadioState radio)
     /// <summary>Set once the client registers itself with <c>amplifier create</c>.</summary>
     public bool IsAmplifier { get; private set; }
 
+    /// <summary>What the box calls itself, once it has registered.</summary>
+    public string? Model { get; private set; }
+
     public bool KeepAlive { get; private set; }
 
     /// <summary>The client's version banner, e.g. the Antenna Genius sends "V4.1.16 AG".</summary>
@@ -181,8 +184,17 @@ public sealed class FlexSession(IFlexRadioState radio)
         }
 
         var handle = radio.AllocateHandle();
-        radio.AddAmplifier(handle, ParseKeyValues(args.Skip(1)));
+        var properties = ParseKeyValues(args.Skip(1));
+        radio.AddAmplifier(handle, properties);
         IsAmplifier = true;     // so this connection appears in the interlock's amplifier list
+
+        // The box names itself here ("PowerGeniusXL", "TunerGeniusXL", …), which is
+        // far more use on screen than its address.
+        if (properties.TryGetValue("model", out var model) && model.Length > 0)
+        {
+            Model = model;
+        }
+
         return [Ok(seq, $"0x{handle:X8}")];   // Flex answers with the new object's handle
     }
 
