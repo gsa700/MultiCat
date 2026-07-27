@@ -82,7 +82,7 @@ public sealed class FlexCommandServer : IAsyncDisposable
         lock (_clientGate)
         {
             return [.. _clients.Select(c => new ConnectedBox(
-                c.Session.Model ?? c.PeerAddress ?? "box",
+                c.Session.FriendlyName ?? c.PeerAddress ?? "box",
                 c.PeerAddress ?? string.Empty,
                 (int)c.Session.Handle))];
         }
@@ -224,7 +224,7 @@ public sealed class FlexCommandServer : IAsyncDisposable
                 if (client.Session.IsSubscribedTo("slice"))
                 {
                     client.Enqueue(line);
-                    served.Add(client.Session.Model ?? client.PeerAddress ?? "box");
+                    served.Add(client.Session.FriendlyName ?? client.PeerAddress ?? "box");
                 }
             }
         }

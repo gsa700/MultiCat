@@ -30,6 +30,38 @@ public sealed class FlexSession(IFlexRadioState radio)
     /// <summary>What the box calls itself, once it has registered.</summary>
     public string? Model { get; private set; }
 
+    /// <summary>
+    /// The best name this connection has offered. An amplifier or tuner names itself
+    /// in "amplifier create"; an antenna switch never sends that — it is not an
+    /// amplifier — and instead greets with a banner like "V4.1.16 AG", so fall back
+    /// to the name in that before resorting to an address.
+    /// </summary>
+    public string? FriendlyName => Model ?? NameFromBanner(ClientBanner);
+
+    /// <summary>Reads the trailing name out of a client banner, expanding the short
+    /// forms these boxes use. Returns null when there is nothing useful in it.</summary>
+    public static string? NameFromBanner(string? banner)
+    {
+        if (banner is not { Length: > 1 })
+        {
+            return null;
+        }
+
+        // "V4.1.16 AG" -> "AG"; a banner with no name part tells us nothing.
+        var parts = banner[1..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            return null;
+        }
+
+        var name = parts[^1];
+        return name.ToUpperInvariant() switch
+        {
+            "AG" => "AntennaGenius",
+            _ => name,
+        };
+    }
+
     public bool KeepAlive { get; private set; }
 
     /// <summary>The client's version banner, e.g. the Antenna Genius sends "V4.1.16 AG".</summary>
