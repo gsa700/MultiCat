@@ -37,6 +37,13 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
 
     public bool Connected { get; private set; }
 
+    /// <summary>
+    /// When rigctld last answered. A socket to a radio that has been switched off can
+    /// look open for a long time, so liveness is judged on replies arriving, not on
+    /// the connection still existing.
+    /// </summary>
+    public DateTimeOffset LastReplyAt { get; private set; } = DateTimeOffset.MinValue;
+
     /// <summary>Cleared if the backend cannot read a named VFO, after which only the
     /// selected one is polled.</summary>
     private bool _vfoInfoSupported = true;
@@ -114,6 +121,9 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
         }
 
         await PollPttAsync(reader, writer, ct);
+
+        // A full cycle came back, so the radio is answering.
+        LastReplyAt = DateTimeOffset.UtcNow;
     }
 
     /// <summary>

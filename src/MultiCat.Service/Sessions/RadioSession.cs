@@ -218,6 +218,8 @@ public sealed class RadioSession : IAsyncDisposable
             var ptt = string.Empty;
             if (activity.Kind is ArbiterActivityKind.ResponseReceived or ArbiterActivityKind.Unsolicited)
             {
+                _lastRadioReply = DateTimeOffset.UtcNow;
+
                 var beforeHz = _tracker.FrequencyHz;
                 var beforeMode = _tracker.Mode;
                 var beforeTx = _tracker.Transmitting;
@@ -316,6 +318,13 @@ public sealed class RadioSession : IAsyncDisposable
         _arbiter ?? throw new InvalidOperationException($"Radio '{Options.Name}' has no arbiter (rigctld owns the port)");
 
     private bool _started;
+    private DateTimeOffset _lastRadioReply = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// How long the radio may go silent before it counts as gone. Everything polls
+    /// far faster than this, so a healthy radio never approaches it.
+    /// </summary>
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(3);
 
     public bool IsConnected => IsSoleOwnerRigctld
         ? _poller?.Connected == true
@@ -324,6 +333,30 @@ public sealed class RadioSession : IAsyncDisposable
             NetworkCatTransport network => network.IsConnected,
             _ => _started,
         };
+
+    /// <summary>
+    /// Whether the radio is actually answering, as opposed to merely still having a
+    /// connection object. Switching a radio off does not promptly break its TCP
+    /// socket — nothing fails until a write eventually times out — so a station left
+    /// running overnight would otherwise go on advertising a radio that is off, and
+    /// the amplifier and antenna switch would keep following it. Anything with
+    /// real-world consequences asks this, not <see cref="IsConnected"/>.
+    /// </summary>
+    public bool IsRadioResponding
+    {
+        get
+        {
+            if (!IsConnected)
+            {
+                return false;
+            }
+
+            var lastReply = IsSoleOwnerRigctld
+                ? _poller?.LastReplyAt ?? DateTimeOffset.MinValue
+                : _lastRadioReply;
+            return DateTimeOffset.UtcNow - lastReply < StaleAfter;
+        }
+    }
 
     public string ConnectionSummary => Options switch
     {
@@ -527,7 +560,9 @@ public sealed class RadioSession : IAsyncDisposable
             // turning it off tears the stack down through the same debounced path a
             // radio going away would — boxes revert to their no-transceiver antenna.
             _flexPresence = new Flex.FlexPresenceSupervisor(
-                isPresent: () => IsConnected && port.FlexAdvertising,
+                // Deliberately the responding test, not just "connected": a radio
+                // switched off for the night must take the stack offline with it.
+                isPresent: () => IsRadioResponding && port.FlexAdvertising,
                 goOnline: () =>
                 {
                     _flexServer!.Accepting = true;
