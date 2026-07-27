@@ -27,11 +27,25 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
 
     public string? Mode { get; private set; }
 
+    /// <summary>VFO B's frequency, read directly rather than inferred from split, so
+    /// the second dial is shown whether or not the radio is split.</summary>
+    public long VfoBHz { get; private set; }
+
+    public string? ModeB { get; private set; }
+
     public bool? Transmitting { get; private set; }
 
     public bool Connected { get; private set; }
 
+    /// <summary>Cleared if the backend cannot read a named VFO, after which only the
+    /// selected one is polled.</summary>
+    private bool _vfoInfoSupported = true;
+
     public event Action<long>? FrequencyChanged;
+
+    public event Action<long>? VfoBChanged;
+
+    public event Action<string>? ModeBChanged;
 
     public event Action<long>? TransmitFrequencyChanged;
 
@@ -84,51 +98,150 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
 
     private async Task PollOnceAsync(StreamReader reader, StreamWriter writer, CancellationToken ct)
     {
-        // get_freq -> one line of Hz
-        await writer.WriteAsync("f\n");
-        var freqLine = await reader.ReadLineAsync(ct);
-        if (long.TryParse(freqLine, out var hz) && hz != FrequencyHz)
+        if (_vfoInfoSupported)
+        {
+            await PollBothVfosAsync(reader, writer, ct);
+        }
+        else
+        {
+            await PollCurrentVfoOnlyAsync(reader, writer, ct);
+        }
+
+        await PollPttAsync(reader, writer, ct);
+    }
+
+    /// <summary>
+    /// Reads both VFOs with "get_vfo_info", which answers exactly five lines —
+    /// frequency, mode, passband, split, satmode — for a NAMED VFO without
+    /// disturbing which one the radio has selected. Two of these give both dials
+    /// and both modes in fewer exchanges than asking for each piece separately,
+    /// and VFO B stays known whether or not split is on.
+    /// </summary>
+    private async Task PollBothVfosAsync(StreamReader reader, StreamWriter writer, CancellationToken ct)
+    {
+        var a = await AskAsync(reader, writer, "\\get_vfo_info VFOA", 5, ct);
+        if (a is null)
+        {
+            // An older backend answers a single RPRT line instead. Fall back for
+            // the rest of this session rather than desynchronising every poll.
+            _vfoInfoSupported = false;
+            logger.LogInformation("rigctld does not support get_vfo_info; reading the current VFO only");
+            return;
+        }
+
+        var b = await AskAsync(reader, writer, "\\get_vfo_info VFOB", 5, ct);
+
+        ApplyVfoA(a[0], a[1]);
+        if (b is not null)
+        {
+            ApplyVfoB(b[0], b[1]);
+        }
+
+        // Split is reported by both VFOs; VFO A's is enough.
+        Split = a[3] == "1";
+        ApplyTransmitFrequency(Split && VfoBHz > 0 ? VfoBHz : FrequencyHz);
+    }
+
+    /// <summary>Fallback for backends without get_vfo_info: the selected VFO only,
+    /// with VFO B knowable just from the split transmit frequency.</summary>
+    private async Task PollCurrentVfoOnlyAsync(StreamReader reader, StreamWriter writer, CancellationToken ct)
+    {
+        var freq = await AskAsync(reader, writer, "f", 1, ct);
+        if (freq is not null && long.TryParse(freq[0], out var hz))
+        {
+            ApplyVfoA(freq[0], null);
+        }
+
+        var mode = await AskAsync(reader, writer, "m", 2, ct);
+        if (mode is not null)
+        {
+            ApplyVfoA(null, mode[0]);
+        }
+
+        var split = await AskAsync(reader, writer, "s", 2, ct);
+        Split = split is not null && split[0] == "1";
+
+        if (Split)
+        {
+            var tx = await AskAsync(reader, writer, "i", 1, ct);
+            if (tx is not null && long.TryParse(tx[0], out var txHz) && txHz > 0)
+            {
+                ApplyVfoB(tx[0], null);
+            }
+        }
+
+        ApplyTransmitFrequency(Split && VfoBHz > 0 ? VfoBHz : FrequencyHz);
+    }
+
+    /// <summary>Sends a command and reads its fixed number of reply lines. Returns
+    /// null when the radio answers an error instead, which is a single line — reading
+    /// the expected count anyway would leave the socket out of step.</summary>
+    private async Task<string[]?> AskAsync(
+        StreamReader reader, StreamWriter writer, string command, int lines, CancellationToken ct)
+    {
+        await writer.WriteAsync($"{command}\n");
+        var first = await reader.ReadLineAsync(ct);
+        if (first is null)
+        {
+            throw new IOException("rigctld closed the connection");
+        }
+
+        if (first.StartsWith("RPRT"))
+        {
+            return null;
+        }
+
+        var reply = new string[lines];
+        reply[0] = first;
+        for (var i = 1; i < lines; i++)
+        {
+            reply[i] = await reader.ReadLineAsync(ct) ?? string.Empty;
+        }
+
+        return reply;
+    }
+
+    private void ApplyVfoA(string? frequency, string? mode)
+    {
+        if (frequency is not null && long.TryParse(frequency, out var hz) && hz != FrequencyHz)
         {
             FrequencyHz = hz;
             FrequencyChanged?.Invoke(hz);
         }
 
-        // get_mode -> mode line + passband line
-        await writer.WriteAsync("m\n");
-        var modeLine = await reader.ReadLineAsync(ct);
-        _ = await reader.ReadLineAsync(ct);
-        if (modeLine is { Length: > 0 } && !modeLine.StartsWith("RPRT") && modeLine != Mode)
+        if (mode is { Length: > 0 } && mode != Mode)
         {
-            Mode = modeLine;
-            ModeChanged?.Invoke(modeLine);
+            Mode = mode;
+            ModeChanged?.Invoke(mode);
+        }
+    }
+
+    private void ApplyVfoB(string? frequency, string? mode)
+    {
+        if (frequency is not null && long.TryParse(frequency, out var hz) && hz != VfoBHz)
+        {
+            VfoBHz = hz;
+            VfoBChanged?.Invoke(hz);
         }
 
-        // get_split_vfo -> split flag + transmit VFO. Both replies are fixed-length,
-        // which keeps this request/response socket in step.
-        await writer.WriteAsync("s\n");
-        var splitLine = await reader.ReadLineAsync(ct);
-        _ = await reader.ReadLineAsync(ct);
-        Split = splitLine == "1";
-
-        var transmitFrequency = FrequencyHz;
-        if (Split)
+        if (mode is { Length: > 0 } && mode != ModeB)
         {
-            // get_split_freq is the transmit frequency, and is meaningful only while
-            // split is on — it answers 0 on a simplex radio.
-            await writer.WriteAsync("i\n");
-            var splitFreq = await reader.ReadLineAsync(ct);
-            if (long.TryParse(splitFreq, out var txHz) && txHz > 0)
-            {
-                transmitFrequency = txHz;
-            }
+            ModeB = mode;
+            ModeBChanged?.Invoke(mode);
         }
+    }
 
-        if (transmitFrequency is { } txHertz && txHertz != TransmitFrequencyHz)
+    private void ApplyTransmitFrequency(long? frequency)
+    {
+        if (frequency is { } hz && hz != TransmitFrequencyHz)
         {
-            TransmitFrequencyHz = txHertz;
-            TransmitFrequencyChanged?.Invoke(txHertz);
+            TransmitFrequencyHz = hz;
+            TransmitFrequencyChanged?.Invoke(hz);
         }
+    }
 
+    private async Task PollPttAsync(StreamReader reader, StreamWriter writer, CancellationToken ct)
+    {
         // get_ptt -> "0" or "1"
         await writer.WriteAsync("t\n");
         var pttLine = await reader.ReadLineAsync(ct);

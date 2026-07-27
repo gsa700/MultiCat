@@ -292,7 +292,7 @@ public sealed class RadioSession : IAsyncDisposable
     /// its dial otherwise needs a variable-length reply this client doesn't do.
     /// </summary>
     public long VfoBHz => IsSoleOwnerRigctld
-        ? (_poller?.Split == true ? _poller.TransmitFrequencyHz ?? 0 : 0)
+        ? _poller?.VfoBHz ?? 0
         : _tracker.VfoBHz ?? 0;
 
     public bool Split => IsSoleOwnerRigctld ? _poller?.Split == true : _tracker.Split;
@@ -301,7 +301,9 @@ public sealed class RadioSession : IAsyncDisposable
     public string ModeA => (IsSoleOwnerRigctld ? _poller?.Mode : _tracker.Mode) ?? string.Empty;
 
     /// <summary>VFO B's mode, or empty when unknown — rigctld exposes only one mode.</summary>
-    public string ModeB => IsSoleOwnerRigctld ? string.Empty : _tracker.ModeB ?? string.Empty;
+    public string ModeB => IsSoleOwnerRigctld
+        ? _poller?.ModeB ?? string.Empty
+        : _tracker.ModeB ?? string.Empty;
 
     /// <summary>Which VFO the radio will transmit on — what the arrow points at.</summary>
     public bool TransmitOnVfoB => Split;
@@ -411,13 +413,21 @@ public sealed class RadioSession : IAsyncDisposable
 
         // Poll rigctld's internal port directly so our own poller never shows up as a
         // client connection or as relay traffic.
+        // A serial radio has no push equivalent of the network path's auto-info, so
+        // the dial only moves as fast as this poll. 150 ms keeps it feeling live
+        // without crowding a CAT link that is shared with the logger and digital apps.
         _poller = new RigctldClientPoller(
             _internalRigctldPort > 0 ? _internalRigctldPort : rigctldPort.RigctldPort.Value,
-            TimeSpan.FromMilliseconds(500),
+            TimeSpan.FromMilliseconds(150),
             _loggerFactory.CreateLogger<RigctldClientPoller>());
         _poller.FrequencyChanged += hz => RaisePollActivity($"f {hz / 1000.0:N2} kHz", frequency: hz);
         _poller.ModeChanged += m => RaisePollActivity($"m {m}", mode: ModeNames.ToDisplay(m));
         _poller.TransmitChanged += tx => RaisePollActivity(tx ? "TX" : "RX", ptt: tx ? "tx" : "rx");
+        // VFO B carries no frequency/mode of its own in the event, which describes
+        // VFO A; the panel reads both dials from the radio's status instead. Raising
+        // it still refreshes that status promptly rather than at the slow poll.
+        _poller.VfoBChanged += hz => RaisePollActivity($"VFO B {hz / 1000.0:N2} kHz");
+        _poller.ModeBChanged += m => RaisePollActivity($"VFO B {m}");
         _poller.Start();
 
         foreach (var port in Options.ClientPorts)
