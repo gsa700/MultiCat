@@ -65,7 +65,7 @@ public sealed class ControlService(
             {
                 // OmniRig forwards to a rigctld endpoint — reuse the radio's, or make one.
                 var rig = request.OmnirigRig is 1 or 2 ? request.OmnirigRig : 1;
-                var rigctld = session.EnsureRigctldPort(sessions.PickFreeTcpPort(4532));
+                var rigctld = session.EnsureRigctldPort(sessions.PickFreeTcpPort(4532, request.Radio));
                 rigctld.OmnirigRig = rig;
                 omnirig.AssignRig(rig, "127.0.0.1", rigctld.RigctldPort!.Value);
                 sessions.Persist();
@@ -82,7 +82,7 @@ public sealed class ControlService(
 
             if (type == "flex")
             {
-                var flexPort = request.Port > 0 ? request.Port : sessions.PickFreeTcpPort(4992);
+                var flexPort = request.Port > 0 ? request.Port : sessions.PickFreeTcpPort(4992, request.Radio);
                 var targets = request.FlexTargets
                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .ToList();
@@ -117,7 +117,7 @@ public sealed class ControlService(
                 _ => throw new ArgumentException($"unknown endpoint type '{type}'"),
             };
 
-            var tcpPort = request.Port > 0 ? request.Port : sessions.PickFreeTcpPort(basePort);
+            var tcpPort = request.Port > 0 ? request.Port : sessions.PickFreeTcpPort(basePort, request.Radio);
             var display = $"{displayPrefix} {tcpPort}";
             var port = new ClientPortOptions
             {

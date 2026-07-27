@@ -229,10 +229,44 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
     public RadioSession? FindSession(string radioName) =>
         _sessions.FirstOrDefault(s => s.Options.Name == radioName);
 
-    /// <summary>Lowest free localhost TCP port at or above <paramref name="basePort"/>,
-    /// skipping ports already claimed by any radio's client endpoints and any port
-    /// currently bound on the machine.</summary>
-    public int PickFreeTcpPort(int basePort)
+    /// <summary>How far apart each radio's block of endpoint ports sits.</summary>
+    public const int PortBlockSize = 10;
+
+    /// <summary>
+    /// Ports hamlib's own daemons use — ampctld and rotctld. They sit inside the
+    /// first radio's block, so they are skipped wherever they fall: handing rotctld's
+    /// port to a rig-control endpoint would collide with a rotator setup that has
+    /// every right to be running alongside us.
+    /// </summary>
+    private static readonly HashSet<int> HamlibReserved = [4531, 4533];
+
+    /// <summary>
+    /// The port a radio's endpoints of a given family start from. Each radio gets its
+    /// own block, so a second radio lands on 4542 rather than borrowing 4533 from the
+    /// first — endpoints stay grouped per radio and stay guessable.
+    /// </summary>
+    public static int BlockBase(int familyBase, int radioIndex) =>
+        familyBase + (Math.Max(radioIndex, 0) * PortBlockSize);
+
+    public static bool IsReservedPort(int port) => HamlibReserved.Contains(port);
+
+    /// <summary>Index of a radio for port-block purposes; unknown radios take the
+    /// first block.</summary>
+    public int RadioIndex(string? radioName) => radioName is null
+        ? 0
+        : Math.Max(_sessions.FindIndex(s => s.Options.Name == radioName), 0);
+
+    /// <summary>Lowest free localhost TCP port in this radio's block (or at or above
+    /// <paramref name="basePort"/> when no radio is named), skipping hamlib's own
+    /// daemon ports, ports already claimed by any radio, and anything bound on the
+    /// machine. Allocation spills past the block rather than failing.</summary>
+    public int PickFreeTcpPort(int basePort, string? radioName = null)
+    {
+        basePort = BlockBase(basePort, RadioIndex(radioName));
+        return PickFreeTcpPortFrom(basePort);
+    }
+
+    private int PickFreeTcpPortFrom(int basePort)
     {
         var claimed = new HashSet<int>();
         foreach (var session in _sessions)
@@ -251,7 +285,7 @@ public sealed class SessionManager : IHostedService, IAsyncDisposable
 
         for (var p = basePort; p < basePort + 500; p++)
         {
-            if (!claimed.Contains(p) && !systemBusy.Contains(p))
+            if (!claimed.Contains(p) && !systemBusy.Contains(p) && !IsReservedPort(p))
             {
                 return p;
             }
