@@ -14,6 +14,15 @@ public sealed class UpdateChecker(ILogger<UpdateChecker> logger, IConfiguration 
     // Deliberately the list, not "releases/latest": that endpoint excludes
     // pre-releases, and every MultiCAT release so far is one, so it answers 404.
     // The list comes back newest first and includes them.
+    //
+    // "Newest first" is GitHub ordering by created_at descending — and a release's
+    // created_at is the date of the commit it was tagged from, not the moment the
+    // release was published. Filling in a version that was missed therefore sorts
+    // into its proper place in history rather than to the top, which is what makes
+    // backfilling safe. It does not work the other way round: only the first entry
+    // is ever read, so a release tagged from a commit newer than the current top
+    // becomes the only one anyone is told about — stations already past its version
+    // number would then hear nothing about the release that really is newest.
     private const string ReleasesUrl = "https://api.github.com/repos/gsa700/MultiCat/releases?per_page=10";
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
