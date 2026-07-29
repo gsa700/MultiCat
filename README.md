@@ -2,6 +2,8 @@
 
 *One radio, many owners.*
 
+At present the Genius emulation is pretty rough. we are running into problems trying to bridge COM ports to the virtualflex driver. While I am confident it will be worked out, I really want to express caution here. The 403a Genius gear has pretty robust interlock protection built in so if it doesn't like something it will generally pout and let you know but not always. So, YMMV. It works much better if you connect to your radio via network and leave the legacy COM stuff out. - AB0R
+
 ![MultiCAT sharing one Elecraft K4 with Log4OM, an LP-100A monitor and a three-box 4O3A Genius stack — both VFOs with the transmit arrow, live client bubbles, and per-app attributed CAT traffic](docs/multicat-live.gif)
 
 *Live: one K4 shared by a logger, a wattmeter monitor and a PowerGenius, TunerGenius
