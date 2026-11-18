@@ -114,6 +114,7 @@ public sealed class RadioSession : IAsyncDisposable
     private readonly Dictionary<string, string> _portStatus = [];
     private readonly ILoggerFactory _loggerFactory;
     private RigctldClientPoller? _poller;
+    private RigctldPttPoller? _pttPoller;
     private Core.Flex.FlexRadioState? _flexState;
     private Flex.FlexCommandServer? _flexServer;
     private Flex.FlexDiscoveryBroadcaster? _flexDiscovery;
@@ -283,7 +284,7 @@ public sealed class RadioSession : IAsyncDisposable
         !Options.Simulator && !Options.IsNetwork && Options.ClientPorts.Any(p => p.RigctldPort is not null);
 
     public bool IsTransmitting =>
-        IsSoleOwnerRigctld ? _poller?.Transmitting == true : _tracker.Transmitting == true;
+        IsSoleOwnerRigctld ? _pttPoller?.Transmitting == true : _tracker.Transmitting == true;
 
     /// <summary>The receive VFO's frequency.</summary>
     public long VfoAHz => (IsSoleOwnerRigctld ? _poller?.FrequencyHz : _tracker.FrequencyHz) ?? 0;
@@ -448,19 +449,41 @@ public sealed class RadioSession : IAsyncDisposable
         // A serial radio has no push equivalent of the network path's auto-info, so
         // the dial only moves as fast as this poll. 150 ms keeps it feeling live
         // without crowding a CAT link that is shared with the logger and digital apps.
+        var pollerPort = _internalRigctldPort > 0 ? _internalRigctldPort : rigctldPort.RigctldPort.Value;
+
         _poller = new RigctldClientPoller(
-            _internalRigctldPort > 0 ? _internalRigctldPort : rigctldPort.RigctldPort.Value,
+            pollerPort,
             TimeSpan.FromMilliseconds(150),
-            _loggerFactory.CreateLogger<RigctldClientPoller>());
+            _loggerFactory.CreateLogger<RigctldClientPoller>(),
+            // PTT has its own poller below; reading it here as well would report every
+            // edge twice, and later than the poller that exists to be prompt about it.
+            pollPtt: false);
         _poller.FrequencyChanged += hz => RaisePollActivity($"f {hz / 1000.0:N2} kHz", frequency: hz);
         _poller.ModeChanged += m => RaisePollActivity($"m {m}", mode: ModeNames.ToDisplay(m));
-        _poller.TransmitChanged += tx => RaisePollActivity(tx ? "TX" : "RX", ptt: tx ? "tx" : "rx");
         // VFO B carries no frequency/mode of its own in the event, which describes
         // VFO A; the panel reads both dials from the radio's status instead. Raising
         // it still refreshes that status promptly rather than at the slow poll.
         _poller.VfoBChanged += hz => RaisePollActivity($"VFO B {hz / 1000.0:N2} kHz");
         _poller.ModeBChanged += m => RaisePollActivity($"VFO B {m}");
         _poller.Start();
+
+        // An amplifier sequences off the key edge, so PTT cannot wait for the state
+        // cycle above: the VFO reads run first and the tick is 150 ms, which put the
+        // edge 150-250 ms late (measured).
+        //
+        // The rate is 3 ms because that is what the network path already uses against
+        // this same radio, and a Genius stack behaves on it. Slower is not a smaller
+        // version of the same thing: at 15 ms the edge landed 24-75 ms late and the
+        // amplifier still hung after unkey, exactly as it did at 200 ms. Serial has
+        // less headroom than the network path - there is no AI push here, so the state
+        // poll competes for the same rigctld - but keying is the deadline that matters
+        // and the dial can wait behind it.
+        _pttPoller = new RigctldPttPoller(
+            pollerPort,
+            TimeSpan.FromMilliseconds(3),
+            _loggerFactory.CreateLogger<RigctldPttPoller>());
+        _pttPoller.TransmitChanged += tx => RaisePollActivity(tx ? "TX" : "RX", ptt: tx ? "tx" : "rx");
+        _pttPoller.Start();
 
         foreach (var port in Options.ClientPorts)
         {
@@ -933,6 +956,11 @@ public sealed class RadioSession : IAsyncDisposable
         if (_poller is not null)
         {
             await _poller.DisposeAsync();
+        }
+
+        if (_pttPoller is not null)
+        {
+            await _pttPoller.DisposeAsync();
         }
 
         try

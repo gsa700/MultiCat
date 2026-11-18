@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Sockets;
 
 namespace MultiCat.Service.Rigctld;
@@ -8,7 +9,13 @@ namespace MultiCat.Service.Rigctld;
 /// This is how the GUI stays live for serial radios in sole-owner mode, where the COM
 /// port can only be opened once. Reconnects until rigctld is up.
 /// </summary>
-public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger logger) : IAsyncDisposable
+/// <param name="pollPtt">
+/// False when a <see cref="RigctldPttPoller"/> is reading PTT instead. Keying then has
+/// exactly one owner — two pollers reporting the same edge would raise it twice, and
+/// out of order — and this cycle gets shorter, which is what the dial wanted anyway.
+/// </param>
+public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger logger, bool pollPtt = true)
+    : IAsyncDisposable
 {
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
@@ -53,6 +60,23 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
     private const int VfoBEveryNthCycle = 8;
 
     private int _cyclesSinceVfoB = VfoBEveryNthCycle;
+
+    /// <summary>
+    /// Where a key edge's delay actually goes, measured rather than reasoned about.
+    /// PTT is read at the end of a cycle that begins with the VFO reads, so the
+    /// interval between consecutive PTT samples — not the timer period — is what
+    /// bounds how late an amplifier hears about a key. Costs nothing unless this
+    /// class is at Debug: set
+    /// "MultiCat.Service.Rigctld.RigctldClientPoller": "Debug" under Logging:LogLevel.
+    /// </summary>
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private static readonly TimeSpan TimingWindow = TimeSpan.FromSeconds(5);
+    private TimeSpan _lastPttSampleAt = TimeSpan.Zero;
+    private TimeSpan _windowStartedAt = TimeSpan.Zero;
+    private int _windowCycles;
+    private double _vfoTotalMs, _vfoMaxMs;
+    private double _pttTotalMs, _pttMaxMs;
+    private double _gapTotalMs, _gapMaxMs;
 
     public event Action<long>? FrequencyChanged;
 
@@ -111,6 +135,9 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
 
     private async Task PollOnceAsync(StreamReader reader, StreamWriter writer, CancellationToken ct)
     {
+        var timing = logger.IsEnabled(LogLevel.Debug);
+        var cycleStartedAt = timing ? _clock.Elapsed : TimeSpan.Zero;
+
         if (_vfoInfoSupported)
         {
             await PollBothVfosAsync(reader, writer, ct);
@@ -120,10 +147,70 @@ public sealed class RigctldClientPoller(int port, TimeSpan interval, ILogger log
             await PollCurrentVfoOnlyAsync(reader, writer, ct);
         }
 
-        await PollPttAsync(reader, writer, ct);
+        var vfosDoneAt = timing ? _clock.Elapsed : TimeSpan.Zero;
+
+        if (pollPtt)
+        {
+            await PollPttAsync(reader, writer, ct);
+        }
+
+        if (timing)
+        {
+            RecordPttTiming(cycleStartedAt, vfosDoneAt, _clock.Elapsed);
+        }
 
         // A full cycle came back, so the radio is answering.
         LastReplyAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Accumulates one cycle and reports every few seconds, so the log carries a
+    /// usable distribution rather than a line per poll. The sample gap is the figure
+    /// that matters: an edge can be missed for that long no matter how quick the
+    /// individual reads are.
+    /// </summary>
+    private void RecordPttTiming(TimeSpan cycleStartedAt, TimeSpan vfosDoneAt, TimeSpan pttDoneAt)
+    {
+        var vfoMs = (vfosDoneAt - cycleStartedAt).TotalMilliseconds;
+        var pttMs = (pttDoneAt - vfosDoneAt).TotalMilliseconds;
+
+        _vfoTotalMs += vfoMs;
+        _pttTotalMs += pttMs;
+        _vfoMaxMs = Math.Max(_vfoMaxMs, vfoMs);
+        _pttMaxMs = Math.Max(_pttMaxMs, pttMs);
+
+        if (_lastPttSampleAt > TimeSpan.Zero)
+        {
+            var gapMs = (pttDoneAt - _lastPttSampleAt).TotalMilliseconds;
+            _gapTotalMs += gapMs;
+            _gapMaxMs = Math.Max(_gapMaxMs, gapMs);
+            _windowCycles++;
+        }
+
+        _lastPttSampleAt = pttDoneAt;
+
+        if (pttDoneAt - _windowStartedAt < TimingWindow || _windowCycles == 0)
+        {
+            return;
+        }
+
+        logger.LogDebug(
+            "State poll over {Cycles} cycles: cycle gap avg {GapAvg:F0} ms / max {GapMax:F0} ms; "
+            + "VFO reads avg {VfoAvg:F0} ms / max {VfoMax:F0} ms; "
+            + "PTT {PttWhere} (avg {PttAvg:F0} ms / max {PttMax:F0} ms); timer interval {Interval:F0} ms",
+            _windowCycles,
+            _gapTotalMs / _windowCycles,
+            _gapMaxMs,
+            _vfoTotalMs / _windowCycles,
+            _vfoMaxMs,
+            pollPtt ? "read on this cycle" : "read by its own poller, not here",
+            _pttTotalMs / _windowCycles,
+            _pttMaxMs,
+            interval.TotalMilliseconds);
+
+        _windowStartedAt = pttDoneAt;
+        _windowCycles = 0;
+        _vfoTotalMs = _vfoMaxMs = _pttTotalMs = _pttMaxMs = _gapTotalMs = _gapMaxMs = 0;
     }
 
     /// <summary>
